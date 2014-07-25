@@ -10,8 +10,8 @@ LD = gcc
 # make sure the corresponding modules have been added
 # and use 'extern "C"{}' to declare lapack routines
 LDPATH  = -L /usr/bin/ld
-LDFLAGS = -lblas -llapack -lrfftw -lfftw -lfftw3 -lm 
-FLAGS   = -Wall -g -I $(BLAS_INCLUDE) -I $(FFTW_INCLUDE)
+LDFLAGS = -lblas -llapack -lfftw3 -lm 
+FLAGS   = -Wall -O3 -g -I $(BLAS_INCLUDE) -I $(FFTW_INCLUDE)
 #KERNEL  = -DDDANISO -DLINEINT
 #KERNEL = -DLAPLACIANFORCE -DTENSOR
 #KERNEL_INT   = -DLAPLACIANFORCE -DLINEINT

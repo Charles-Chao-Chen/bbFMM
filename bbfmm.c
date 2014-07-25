@@ -8,13 +8,6 @@
 #define FFTW_FLAG FFTW_ESTIMATE
 #define HOMO_THRESHOLD 1e-1 // threshold of homogeneous kenrel
 
-#define READ_CHECK( callReturn, num ) do {				\
-    if (callReturn != num) {						\
-      printf("Read error in file '%s' at line %i.\n"			\
-	     , __FILE__, __LINE__);					\
-      exit(1);								\
-    }									\
-  } while(0)								\
     
 /*
  * Function: Timer

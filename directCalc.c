@@ -5,7 +5,68 @@
 #include "directCalc.h"
 
 
- 
+void EvaluateLayer(vec3 *field, int Nf, vec3 *source, double *intensity,
+		   int Ns, dof2 dof, int lpbc, double boxLen,
+		   kfun_t kfun, double *potential) {
+   
+  int i, j, l1, l2, l3;
+
+  // for dgemv
+  int incr=1;
+  char trans[] = "n";
+  double alpha = 1, beta = 1;
+	      
+  int start = floor(0.5 + (pow(3,lpbc)-1)/2.);      
+  int end;
+  if (lpbc <  2)
+    end  = -1;
+  else
+    end  =  1;
+
+  // initialize the potential
+  int dofNf = dof.f*Nf;
+  for (i=0; i<dofNf; i++)
+    potential[i] = 0;
+  
+  // Compute the interactions from 'start' level to 'end' level
+  vec3 sourcepos, cshift;
+  double Kij[dof.f*dof.s];
+
+  for (i=0;i<Nf;i++) {
+    for (j=0;j<Ns;j++) {
+      
+      for (l1=-start;l1<start+1;l1++) {
+	cshift.x = (double)l1*boxLen;
+	for (l2=-start;l2<start+1;l2++) {
+	  cshift.y = (double)l2*boxLen;
+	  for (l3=-start;l3<start+1;l3++) {
+	    cshift.z = (double)l3*boxLen;
+
+	    // apply the shift of source points
+	    if (abs(l1) > end || abs(l2) > end || abs(l3) > end) {
+	      sourcepos.x = source[j].x + cshift.x;
+	      sourcepos.y = source[j].y + cshift.y;
+	      sourcepos.z = source[j].z + cshift.z;
+              
+	      kfun(&field[i], &sourcepos, Kij);
+
+	      if (dof.f == 1 && dof.s == 1)
+		potential[i] += Kij[0] * intensity[j];
+	      else
+		dgemv_(trans, &dof.f, &dof.s, &alpha, Kij, &dof.f, intensity + j*dof.s, &incr,
+		       &beta, potential + i*dof.f, &incr);
+	    }
+	  }
+	}
+      }
+    }
+  }
+}
+
+
+/*
+  // Old function: explicitly creates a big coefficient matrix and use dgemv
+  // which can result in memory usage problem
 void EvaluateLayer(vec3 *field, int Nf, vec3 *source, double *sourceCharge,
 		   int Ns, dof2 dof, int lpbc, double boxLen,
 		   kfun_t kfun, double *stressField) {
@@ -23,6 +84,7 @@ void EvaluateLayer(vec3 *field, int Nf, vec3 *source, double *sourceCharge,
   // Compute the interactions from 'start' level to 'end' level
   vec3 sourcepos, cshift;
   double Kij[dof.f*dof.s];
+  //double *KPBC = (double *) calloc(dofNf*dofNs, sizeof(double));
   double *KPBC = (double *) calloc(dofNf*dofNs, sizeof(double));
 
   for (i=0;i<Nf;i++) {
@@ -62,6 +124,7 @@ void EvaluateLayer(vec3 *field, int Nf, vec3 *source, double *sourceCharge,
   
   free(KPBC), KPBC=NULL; 
 }
+*/
 
 
 // Computes mean stress over the box directly
@@ -512,10 +575,10 @@ void DirWo1 (double *phi, int N, int lpbc) {
   FILE *f2 = fopen("DirectResultlpbc2.bin", "rb");
   FILE *f3 = fopen("DirectResultlpbc3.bin", "rb");
 
-  fread( a0, sizeof(double), N, f0 );
-  fread( a1, sizeof(double), N, f1 );
-  fread( a2, sizeof(double), N, f2 );
-  fread( a3, sizeof(double), N, f3 );
+  READ_CHECK( fread( a0, sizeof(double), N, f0 ), N );
+  READ_CHECK( fread( a1, sizeof(double), N, f1 ), N );
+  READ_CHECK( fread( a2, sizeof(double), N, f2 ), N );
+  READ_CHECK( fread( a3, sizeof(double), N, f3 ), N );
 
   fclose(f0);
   fclose(f1);
@@ -559,9 +622,9 @@ void DirPBC (double *phi, int N, int lpbc) {
   FILE *f2 = fopen("DirectResultlpbc2.bin", "rb");
   FILE *f3 = fopen("DirectResultlpbc3.bin", "rb");
 
-  fread( a1, sizeof(double), N, f1 );
-  fread( a2, sizeof(double), N, f2 );
-  fread( a3, sizeof(double), N, f3 );
+  READ_CHECK( fread( a1, sizeof(double), N, f1 ), N );
+  READ_CHECK( fread( a2, sizeof(double), N, f2 ), N );
+  READ_CHECK( fread( a3, sizeof(double), N, f3 ), N );
 
   fclose(f1);
   fclose(f2);

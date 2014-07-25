@@ -3,6 +3,16 @@
   
 #include <stdbool.h>
 
+
+#define READ_CHECK( callReturn, num ) do {				\
+    if (callReturn != num) {						\
+      printf("Read error in file '%s' at line %i.\n"			\
+	     , __FILE__, __LINE__);					\
+      exit(1);								\
+    }									\
+  } while(0)								\
+
+
 // 3d point
 typedef struct {
   double x,y,z;
@@ -16,7 +26,7 @@ typedef struct {
 } segT;
 
 
-/* Struct: deg2
+/* Struct: dof2
  * -------------------------------------------------------------------
  * The FMM can handle cases where the input are output variables
  * are vectors (not just scalars).
@@ -71,6 +81,12 @@ inline void create_directory( char *name);
 extern "C" {
 #endif
 
+  /* Note that blas/lapack routines are Fortran-style:
+   *   (1) Pass variables by address, not by value.
+   *   (2) Store your data in Fortran style, that is, column-major
+   *   rather than row-major order.
+   */
+  
   // Declaration for BLAS dot product
   double ddot_(int *n, double *dx, int *incx, double *dy, int *incy);
 

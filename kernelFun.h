@@ -34,6 +34,8 @@ typedef struct {
 void PolyFun (vec3* fieldpos, vec3* sourcepos, double *K);
 
 void GaussianFun (vec3* fieldpos, vec3* sourcepos, double *K);
+
+void LaplacianFun (vec3* fieldpos, vec3* sourcepos, double *K);
   
 // test PBC implementation 
 void LapforceFun (vec3* fieldpos, vec3* sourcepos, double *K);

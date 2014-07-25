@@ -74,8 +74,9 @@ int main(int argc, char *argv[]) {
   
   //AnisoInit();
   //kernelT kfun = &AnisoFun;
-  kernel_t kernel = {"lapforce", 2.0, -1, &LapforceFun};
+  //kernel_t kernel = {"lapforce", 2.0, -1, &LapforceFun};
   //kernel_t kernel = {"gaussian",  0.0,  0, &GaussianFun};
+  kernel_t kernel = {"laplace", 1.0, 1, &LaplacianFun};
 
   
   double epsilon = 1e-9;

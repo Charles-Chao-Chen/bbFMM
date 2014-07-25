@@ -40,6 +40,16 @@ void PolyFun (vec3* fieldpos, vec3* sourcepos, double *K) {
  *    LAPLACIAN KERNEL (1/r)     *
  *********************************/
 
+void LaplacianFun (vec3* fieldpos, vec3* sourcepos, double *K) {
+  
+  vec3 diff;
+
+  diff.x = sourcepos->x - fieldpos->x;
+  diff.y = sourcepos->y - fieldpos->y;
+  diff.z = sourcepos->z - fieldpos->z;
+  
+  *K     = 1./sqrt(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
+}
 
 
 /*********************************
