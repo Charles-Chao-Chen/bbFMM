@@ -6,7 +6,7 @@
 
 
 void EvaluateLayer(vec3 *field, int Nf, vec3 *source, double *intensity,
-		   int Ns, dof2 dof, int lpbc, double boxLen,
+		   int Ns, int2 dof, int lpbc, double boxLen,
 		   kfun_t kfun, double *potential) {
    
   int i, j, l1, l2, l3;
@@ -68,7 +68,7 @@ void EvaluateLayer(vec3 *field, int Nf, vec3 *source, double *intensity,
   // Old function: explicitly creates a big coefficient matrix and use dgemv
   // which can result in memory usage problem
 void EvaluateLayer(vec3 *field, int Nf, vec3 *source, double *sourceCharge,
-		   int Ns, dof2 dof, int lpbc, double boxLen,
+		   int Ns, int2 dof, int lpbc, double boxLen,
 		   kfun_t kfun, double *stressField) {
    
   int i, j, k, l, count, l1, l2, l3, begGlobal, incr=1;
@@ -129,7 +129,7 @@ void EvaluateLayer(vec3 *field, int Nf, vec3 *source, double *sourceCharge,
 
 // Computes mean stress over the box directly
 void MeanStressDirect(int numGauss, vec3 *source, double
-		      *sourceCharge, int sourceSize, dof2 dof, int lpbc,
+		      *sourceCharge, int sourceSize, int2 dof, int lpbc,
 		      double Len, kfun_t kfun, double
 		      *meanStress){
    
@@ -176,13 +176,13 @@ void MeanStressDirect(int numGauss, vec3 *source, double
  */
 /*
 void DirectCalc3D(vec3 *field, int Nf, vec3 *source, double
-		  *sourceCharge, int sourceSize, dof2 dof, int levelpbc,
+		  *sourceCharge, int sourceSize, int2 dof, int levelpbc,
 		  double boxLen, kfun_t kfun, double
 		  *stressField) {
   */
 double* directCalc( vec3 *field, int Nf, vec3 *source, int sourceSize,
 		    double *sourceCharge,
-		    dof2 dof, double boxLen, kfun_t kfun, int levelpbc ) {
+		    int2 dof, double boxLen, kfun_t kfun, int levelpbc ) {
 
   double *stressField = calloc(Nf*dof.f, sizeof(double));
   

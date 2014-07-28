@@ -18,7 +18,7 @@ typedef struct {
   char name[50];
   double homogen;
   int symm;
-  //dof2 dof;
+  //int2 dof;
   kfun_t kfun;
 } kernel_t;
 
@@ -55,10 +55,10 @@ void AnisoClean();
 
 
 // Add interaction from PBC using FMM
-void DoCorrectionTable(double *ChebyshevWeightSource, double *ChebyshevWeightField, int n, dof2 dof, double Len, double alpha, int lpbc, kernel_t kernel, double *Tkz);
+void DoCorrectionTable(double *ChebyshevWeightSource, double *ChebyshevWeightField, int n, int2 dof, double Len, double alpha, int lpbc, kernel_t kernel, double *Tkz);
 
 
-void CreateTableCorrection(kfun_t kfun, int n, dof2 dof, double alpha, int lpbc, double *Tkz, char* PBCfilename);
+void CreateTableCorrection(kfun_t kfun, int n, int2 dof, double alpha, int lpbc, double *Tkz, char* PBCfilename);
 
   
 void ComputeWeightsPBC(double *UpMat, int n, double alpha, double *Tkz);

@@ -9,11 +9,11 @@
  * the result in phi.
  */
 double* directCalc( vec3 *field, int Nf, vec3 *source, int Ns, double *q,
-		    dof2 dof, double box_len, kfun_t kfun, int level_pbc );
+		    int2 dof, double box_len, kfun_t kfun, int level_pbc );
 
 /*
 void DirectCalc3D(vec3 *field, int Nf, vec3 *source, double
-		  *sourceCharge, int sourceSize, dof2 dof, int levelpbc,
+		  *sourceCharge, int sourceSize, int2 dof, int levelpbc,
 		  double boxLen, kfun_t kernel, double
 		  *stressField);
 */

@@ -12,6 +12,16 @@
     }									\
   } while(0)								\
 
+  
+/* Function: Timer
+ * ----------------------------------------
+ * Returns the time in seconds.
+ */
+typedef double timeType;
+timeType Timer(void);
+#define evaltime(timeval_time) (double)timeval_time.tv_sec	\
+  + (double)timeval_time.tv_usec*1e-6
+
 
 // 3d point
 typedef struct {
@@ -26,7 +36,7 @@ typedef struct {
 } segT;
 
 
-/* Struct: dof2
+/* Struct: int2
  * -------------------------------------------------------------------
  * The FMM can handle cases where the input are output variables
  * are vectors (not just scalars).
@@ -38,7 +48,7 @@ typedef struct {
 typedef struct {
   int s; // Size of source vector
   int f; // Size of target vector
-} dof2;
+} int2;
 
 
 /* Uniform random number generator */
@@ -129,13 +139,13 @@ void SetSources(vec3 *field, int Nf, vec3 *source, int Ns, double *q,
 		int dof, double L);
 
 void SetSourcesCase1(vec3 *field, vec3 *source, double *q,
-		     int N, dof2 * dof, double L, double r);
+		     int N, int2 * dof, double L, double r);
 
 //void SetSourcesCase2(vec3 *field, vec3 *source, double *q,
-//		       int N, dof2 * dof, double L, vec3 *scent, double *rrr);
+//		       int N, int2 * dof, double L, vec3 *scent, double *rrr);
 
 void SetSourcesCase3(vec3 *field, vec3 *source, double *q,
-		     int N, dof2 * dof, double L, vec3 *scent, double *rrr);
+		     int N, int2 * dof, double L, vec3 *scent, double *rrr);
 
 
 #endif

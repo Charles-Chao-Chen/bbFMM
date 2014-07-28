@@ -6,7 +6,6 @@
 #include <stdbool.h>  // false
 #include <math.h>
 #include <string.h>
-#include <sys/time.h>
 #include <fftw3.h>
 
 #include "AnisoFunctions.h"
@@ -26,38 +25,45 @@ extern "C" {
   
 
   typedef enum {
-    POINT,
+    PNT,
     SEG,
   } srcT;
 
+
+  
+  typedef struct {
+    srcT  src_t;  // source type: points or segments
+    segT *seg;    // segment source
+    vec3 *source; // point source
+
+    double *q;    // source intensity
+    double *burg; // burger's vector    (for segment)
+
+    int Ns;       // source size
+    int nGauss;   // Gauss quadrature # (for segment)
+  } fmm_src;
+  
   
   typedef struct {
     srcT src_t;
-    segT *seg; // segment source
+    segT *seg;    // segment source
     vec3 *source; // point source
-    double *sigma;  // source intensity
-    vec3 *target; // target points
-    int n;  // interpolation order
-    int Ns; // source size
-    int Nf; // target size
-    double boxL;  // box length
-    double boxA;  // box adjustment parameter for segment source
+    vec3 *field;  // target points
+    double *q;    // source intensity
+    double *burg; // burger's vector for segment
+    int n;        // interpolation order
+    int Ns;       // source size
+    int Nf;       // target size
     int fmm_lvl;  // fmm tree level
     int pbc_lvl;  // fmm pbc level
+    
+    double boxL;  // box length
+    double boxA;  // box adjustment parameter for segment source
+    double epsilon; // SVD accuracy
+
     gridT grid_t; // interpolation grid type
   } fmm_input;
 
-  
-  /*
-   * Function: Timer
-   * ----------------------------------------
-   * Returns the time in seconds.
-   *
-   */
-  typedef double timeType;
-  timeType Timer(void);
-#define evaltime(timeval_time) (double)timeval_time.tv_sec	\
-  + (double)timeval_time.tv_usec*1e-6
 
   /* Struct: nodeT
    * -------------------------------------------------------------------
@@ -91,14 +97,14 @@ extern "C" {
   typedef struct _fmmparam {
     int Ns;       // Number of sources
     int Nf;       // Number of field points
-    dof2 dof;        // Number of degrees of freedom
+    int2 dof;        // Number of degrees of freedom
     double L;        // Length of one side of simulation cube
     int n;        // Number of Chebyshev nodes in one direction
     int levels;        // Maximum number of levels in octree
     int PBClevels;        // Number of PBC levels (images = 27^PBClevels)
     int PBCshells;        // Number of PBC shells (for direct calculation)
     int precomp;        // Turn on (1) or off (0) pre-computation
-    dof2 cutoff;       // Number of singular values to keep
+    int2 cutoff;       // Number of singular values to keep
     double homogen;        // Order of homogeneity of kernel
     char filesval[80];     // File name for storing singular values
     char filesvec[80];     // File name for storing singular vectors
@@ -116,13 +122,13 @@ extern "C" {
 
 #ifdef LINEINT
   void bbfmm(vec3 *field, segT *segment, double *burg, int Nf,
-	     int Ns, dof2 dof, double boxLen, double alpha, int
+	     int Ns, int2 dof, double boxLen, double alpha, int
 	     level, int n, kernel_t kernel, double epsilon,
-	     int numgau, double *phi, int grid_type, int lpbc);
+	     double *phi, int grid_type, int lpbc);
 
 #elif TENSOR
 double* bbfmm( vec3 *field, int Nf, vec3 *source, int Ns, double *q,
-	       dof2 dof,
+	       int2 dof,
 	       double box_len, double alpha, int n, gridT grid,
 	       kernel_t kernel, int level_tree, int level_pbc,
 	       double epsilon );
@@ -130,30 +136,30 @@ double* bbfmm( vec3 *field, int Nf, vec3 *source, int Ns, double *q,
 #endif
 
 
-  /*
-   * Function: FMMSetup
-   * -----------------------------------------------------------------
-   * Prepare for the FMM calculation by setting the parameters, computing
-   * the weight matrices, pre-computing the SVD (if necessary), reading 
-   * in the necessary matrices, and building the FMM hierarchy.
-   */
-void FMMSetup(nodeT **A, double *Tkz, int *Ktable, double
-	      *Kweights, double *Cweights, double boxLen, double
-	      alpha, dof2 *cutoff, int n,
-	      kernel_t kernel, double epsilon, dof2
-	      dof, int Ns, int treeLevel, char *Kmat, char *Umat,
-	      char *Vmat, int grid_type);
+  nodeT* BuildTree(double boxLen, int treeLevel, int n);
+     
+
+/*
+ * Function: GetM2L
+ * -----------------------------------------------------------------
+ * Compute M2L operators or read them from existing files.
+ */
+void GetM2L(double *Kweights, double boxLen, double alpha,
+	    int2 *cutoff, int n,
+	    kernel_t kernel, double epsilon, int2
+	    dof, int Ns, int treeLevel,
+	    double **K, double **U, double **VT, int grid_type);
   
 
-bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
+bool PrecomputeAvailable( char *Kmat, char *Umat, char *Vmat,
 			      double homogen, double boxLen,
 			      int treeLevel, int grid_type );
 
 
-  void generate_precompute_files(double boxLen, int treeLevel, int n, dof2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double alpha, double *Kweights, double epsilon, int grid_type);
+  void StartPrecompute(double boxLen, int treeLevel, int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double alpha, double *Kweights, double epsilon, int grid_type);
 
      
-  void compute_m2l_operator (int n, dof2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double l, double alpha, double *Kweights, double epsilon, int grid_type);
+  void compute_m2l_operator (int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double l, double alpha, double *Kweights, double epsilon, int grid_type);
      
   /*
    * Function: FMMReadMatrices
@@ -161,8 +167,8 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * Read in the kernel interaction matrix M and the matrix of singular
    * vectors U.
    */
-  void FMMReadMatrices(double **K, double **U, double **VT, dof2 cutoff,
-		       int n, dof2 dof, char *Kmat, char *Umat,
+  void FMMReadMatrices(double **K, double **U, double **VT, int2 *cutoff,
+		       int n, int2 dof, char *Kmat, char *Umat,
 		       char *Vmat, int treeLevel, double homogen,
 		       int grid_type);
 
@@ -174,7 +180,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * Distribute the field points and sources to the appropriate location
    * in the FMM hiearchy and sets up the interaction list.
    */
-  void FMMDistribute(nodeT **A, vec3 *field, vec3 *source,
+  void FMMDistribute(nodeT *A, vec3 *field, vec3 *source,
 		     int Nf, int Ns, int level);
 
   /*
@@ -187,8 +193,8 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
   void FMMCompute(nodeT **A, vec3 *field, int Nf, segT *segment, 
 		  vec3 * midpoint, double *burg, double *K, double *U, 
 		  double *VT, double *Tkz, int *Ktable, double *Kweights,
-		  double *Cweights, dof2 cutoff, int n, 
-		  dof2 dof, int numgau, double alpha, double *phi,
+		  double *Cweights, int2 cutoff, int n, 
+		  int2 dof, double alpha, double *phi,
 		  int grid_type, double boxLen, int lpbc,
 		  kernel_t kernel);
 
@@ -196,7 +202,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
   void FMMCompute(nodeT **A, vec3 *field, int Nf, vec3 *source, 
 		  double *q, double *K, double *U, 
 		  double *VT, double *Tkz, int *Ktable, double *Kweights,
-		  double *Cweights, dof2 cutoff, int n, dof2 dof,
+		  double *Cweights, int2 cutoff, int n, int2 dof,
 		  double alpha, double *phi, int
 		  grid_type, double boxLen, int lpbc,
 		  kernel_t kernel);
@@ -222,18 +228,9 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * a leaf box with their quadrature weights
    */
   void LineIntegral(segT *segment, vec3 *midpoint, int Ns,
-		    int *sourcelist, int num, double *gpoint, double
+		    int *sourcelist, double *gpoint, double
 		    L, vec3 scenter, vec3 *sourcet, double *xi);
 
-
-  /*
-   * Function: EvaluateKernel
-   * -------------------------------------------------------------------
-   * Evaluates the kernel given a source and a field point.
-   */
-  void EvaluateKernel(vec3 fieldpos, vec3 sourcepos, paraAniso
-		      *AnisoParameters,
-		      double *K, dof2 dof);
 
   /*
    * Function: EvaluateKernelCell
@@ -241,7 +238,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * Evaluates the kernel for interactions between a pair of cells.
    */
   void EvaluateKernelCell(vec3 *fieldpos, vec3 *sourcepos, 
-			  int Nf, int Ns, dof2 dof, kfun_t kfun, double *kernel);
+			  int Nf, int Ns, int2 dof, kfun_t kfun, double *kernel);
 
   /*
    * Function: EvaluateField
@@ -249,7 +246,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * Evaluates the kernel for interactions between a pair of cells.
    */
   void EvaluateField(vec3 *fieldpos, vec3 *sourcepos, 
-		     double *q, int Nf, int Ns, dof2 dof, 
+		     double *q, int Nf, int Ns, int2 dof, 
 		     kfun_t kfun, double *fieldval);
 
   /*
@@ -268,25 +265,25 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
 
 
   /*
-   * Function: ComputeKernelSVD
+   * Function: ComputeKernelCheb
    * -------------------------------------------------------------------
    * Computes the kernel for 316n^6 interactions between Chebyshev nodes
    * and then computes the SVD of the kernel matrix.
    */
-  void ComputeKernelSVD(double *Kweights, int n, kernel_t kernel,
-			double epsilon, dof2 dof,
-			char *Kmat, char *Umat, char *Vmat, double
-			alpha, double boxLen);
+  void ComputeKernelCheb(double *Kweights, int n, kernel_t kernel,
+			 double epsilon, int2 dof,
+			 char *Kmat, char *Umat, char *Vmat, double
+			 alpha, double boxLen);
 
 
   /*
-   * Function: ComputeKernelUniformGrid
+   * Function: ComputeKernelUnif
    * ------------------------------------------------------------------
    * Computes the kernel for 316(2n-1)^3 interactions between Uniform
    * Grid nodes. Does not compute SVD.
    */
-  void ComputeKernelUniformGrid(int n,dof2 dof, kfun_t kfun, char
-				*Kmat, double alpha, double len);
+  void ComputeKernelUnif(int n,int2 dof, kfun_t kfun, char
+			 *Kmat, double alpha, double len);
  
 
   /*
@@ -296,7 +293,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * initializes the quantities in the node.
    *
    */
-  void NewNode(nodeT **A, vec3 center, double L, int n);
+  nodeT* NewNode( vec3 center, double L, int n );
 
   /*
    * Function: BuildFMMHierarchy
@@ -304,7 +301,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * Builds the FMM hierarchy with l levels.
    *
    */
-  void BuildFMMHierarchy(nodeT **A, int l, int n);
+  void BuildFMMHierarchy(nodeT *A, int l, int n);
 
   /*
    * Function: DistributeFieldPoints
@@ -312,7 +309,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * Distributes all of the field points to the appropriate cell at the 
    * bottom of the octree.
    */
-  void DistributeFieldPoints(nodeT **A, vec3 *field, int *fieldlist, int levels);
+  void DistributeFieldPoints(nodeT *A, vec3 *field, int *fieldlist, int levels);
 
   /*
    * Function: DistributeSources
@@ -320,7 +317,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * Distributes all of the sources to the appropriate cell at the 
    * bottom of the octree.
    */
-  void DistributeSources(nodeT **A, vec3 *segment, 
+  void DistributeSources(nodeT *A, vec3 *segment, 
 			 int *sourcelist, int levels);
 
   /*
@@ -329,7 +326,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * For each node at each level of the octree, the interaction list
    * is determined.
    */
-  void InteractionList(nodeT **A, int levels);
+  void InteractionList(nodeT *A, int levels);
 
 
   double AdjustBoxSize(double Len, double alpha);
@@ -345,14 +342,14 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
 #ifdef LINEINT
   void UpwardPass(nodeT **A, segT *segment, vec3 *midpoint,
 		  double *Tkz, double *burg, double *Kweights, 
-		  int n, int dof, int numgau, double *gpoint,
+		  int n, int dof, double *gpoint,
 		  double *gweight, double alpha, int grid_type);
 		  //, double boxLen, double homogen, int lpbc, kfun_t kfun);
 
 #elif TENSOR
   void UpwardPass(nodeT **A, vec3 *source, double *q,
 		  double *Cweights, double *Tkz,
-		  dof2 cutoff, int n, int dof, int grid_type);
+		  int2 cutoff, int n, int dof, int grid_type);
 #endif
 
   void Moment2Moment(int n, double *r, double *Schild, double *SS, 
@@ -360,7 +357,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
 
   void Particle2Moment(nodeT **A, segT *segment, double *burg, 
 		       vec3 *midpoint, int n, double *Tkz, int dof, 
-		       int numgau, double *gpoint, double *gweight,
+		       double *gpoint, double *gweight,
 		       double alpha, int grid_type);
 
   /*
@@ -370,14 +367,14 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * field and source Chebyshev nodes is computed using a SVD lookup table.
    */
   void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U, 
-		      double *VT, double *Kweights, int n, dof2 dof,
-		      dof2 cutoff, double homogen, int treeLevel, int
+		      double *VT, double *Kweights, int n, int2 dof,
+		      int2 cutoff, double homogen, int treeLevel, int
 		      grid_type);
 
 
   void Moment2Local(int n, double *R, double *cell_mpCoeff, 
-		    double *FFCoeff, double *E, int *Ktable, dof2
-		    dof, dof2 cutoff, double *VT, double *Kweights,
+		    double *FFCoeff, double *E, int *Ktable, int2
+		    dof, int2 cutoff, double *VT, double *Kweights,
 		    int grid_type);
 
 
@@ -386,7 +383,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
    * ---------------------------------------------------------------------
    * Add the interactions due to the periodic images.
    */
-  //void FMMInteractionPBC(nodeT **A, double *KPBC, int n, dof2 dof);
+  //void FMMInteractionPBC(nodeT **A, double *KPBC, int n, int2 dof);
 
   /*
    * Function: DownwardPass
@@ -403,7 +400,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
 #elif TENSOR
   void DownwardPass(nodeT **A, vec3 *field, vec3 *source, 
 		    double *Cweights, double *Tkz, double *q,
-		    dof2 cutoff, int n, dof2 dof,
+		    int2 cutoff, int n, int2 dof,
 		    double alpha, kfun_t kfun,
 		    double *phi, int grid_type);
                                                  
@@ -433,7 +430,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
 
 
 
-void AddPBC(int lpbc, double *M, double **L, double *phi, int Nf, int n, dof2 dofst, double boxLen, double alpha, double *Tkz, kernel_t kernel, int grid_type );
+void AddPBC(int lpbc, double *M, double **L, double *phi, int Nf, int n, int2 dofst, double boxLen, double alpha, double *Tkz, kernel_t kernel, int grid_type );
 
 void GridPos1d(double alpha, double len, int n, int grid_type, double *nodes);
 void GridPos3d(const vec3 center, const double alpha, const double L, const int n, const gridT grid, vec3 *P);

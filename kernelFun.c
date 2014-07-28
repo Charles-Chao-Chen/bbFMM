@@ -574,7 +574,7 @@ void Segment2Point(segT *segment, int segmentSize, double *burg, int
 
 
  /* ---- PBC functions ---- */
-void DoCorrectionTable(double *ChebyshevWeightSource, double *ChebyshevWeightField, int n, dof2 dof, double Len, double alpha, int lpbc, kernel_t kernel, double *Tkz) {
+void DoCorrectionTable(double *ChebyshevWeightSource, double *ChebyshevWeightField, int n, int2 dof, double Len, double alpha, int lpbc, kernel_t kernel, double *Tkz) {
 
   kfun_t kfun = kernel.kfun;
   double homogen = kernel.homogen;
@@ -644,7 +644,7 @@ static double AdjustBoxSize(double L, double alpha){
  * Forms the matrix that describes the interactions of the computational
  * cell with its periodic images up to lpbc shells.
  */
-void CreateTableCorrection(kfun_t kfun, int n, dof2 dof, double alpha, int lpbc, double *Tkz, char* PBCfilename) {	    
+void CreateTableCorrection(kfun_t kfun, int n, int2 dof, double alpha, int lpbc, double *Tkz, char* PBCfilename) {	    
 
    
   int n3 = n*n*n, i, j, k, l, m, l1, l2, l3, count;              

@@ -1,4 +1,12 @@
-Replace fftw2 with fftw3 
+Changed 'FMMSetup()' to 'ComputeM2L()'.
+
+Put 'FMMReadMatrices()' into 'FMMSetup()'.
+
+Created 'BuildTree()'.
+
+Changed 'dof2' to 'int2'.
+
+Replace fftw2 with fftw3. Done 
 
 Set uniform 'Umat' and 'Vmat' to be existing files
 in FMMSetup().

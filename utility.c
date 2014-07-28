@@ -1,12 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <sys/time.h>  // for 'struct timeval', 'gettimeofday()' and 'evaltime()'
 #include <sys/types.h>
-#include <sys/stat.h> // create directory
+#include <sys/stat.h>  // create directory
 #include <math.h>
 #include "utility.h"
 
 #define EQUAL_DOUBLE_EPS 1e-6
+
+
+/* Function: Timer
+ * ----------------------------------------
+ * Returns the time in seconds.
+ */
+extern timeType Timer(void) {
+  struct timeval timeval_time;
+  gettimeofday(&timeval_time,NULL);
+  return evaltime(timeval_time);
+}
+
 
 double* Add(double *x, const double *y, const int n) {
 
@@ -138,7 +151,7 @@ void SetSources(vec3 *field, int Nf, vec3 *source, int Ns, double *q,
 
 // Points distributed outside a cube of radius r and inside the unit cube
 void SetSourcesCase1(vec3 *field, vec3 *source, double *q,
-		     int N, dof2 * dof, double L, double r) {
+		     int N, int2 * dof, double L, double r) {
 	
   int i, j, k;
   double tmp;
@@ -175,7 +188,7 @@ void SetSourcesCase1(vec3 *field, vec3 *source, double *q,
 
 /*
   void SetSourcesCase2(vec3 *field, vec3 *source, double *q,
-  int N, dof2 * dof, double L, vec3 *scent, double *rrr) {
+  int N, int2 * dof, double L, vec3 *scent, double *rrr) {
  
   int i, j, k;
   double tmp;
@@ -209,7 +222,7 @@ void SetSourcesCase1(vec3 *field, vec3 *source, double *q,
 */
 
 void SetSourcesCase3(vec3 *field, vec3 *source, double *q,
-		     int N, dof2 * dof, double L, vec3 *scent, double *rrr) {
+		     int N, int2 * dof, double L, vec3 *scent, double *rrr) {
 	
   int i, j, k;
   double tmp;

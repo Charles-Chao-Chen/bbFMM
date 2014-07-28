@@ -5,22 +5,11 @@
 #include "bbfmm.h"
 
 
-#define FFTW_FLAG FFTW_ESTIMATE
-#define HOMO_THRESHOLD 1e-1 // threshold of homogeneous kenrel
+#define FFTW_FLAG FFTW_ESTIMATE // option for fftw plan type
+#define HOMO_THRESHOLD 1e-1     // threshold of homogeneous kenrel
 
-    
-/*
- * Function: Timer
- * ----------------------------------------
- * Returns the time in seconds.
- *
- */
-extern timeType Timer(void) {
-  struct timeval timeval_time;
-  gettimeofday(&timeval_time,NULL);
-  return evaltime(timeval_time);
-}
-
+#define NUMGAUSS 10          // Gauss quadrature points
+                                // choose to match the interpolation accuracy
 
 /*
   INPUT: epsilon: target accuracy; this is used to determine which
@@ -29,58 +18,55 @@ extern timeType Timer(void) {
 */
 #ifdef LINEINT
 void bbfmm(vec3 *field, segT *segment, double *burg, int Nf, int Ns,
-	   dof2 dof, double boxLen, double alpha, int treeLevel, int n,
-           kernel_t kernel, double epsilon, int numgau,
+	   int2 dof, double boxLen, double alpha, int treeLevel, int n,
+           kernel_t kernel, double epsilon,
 	   double *stressFmm, int grid_type, int lpbc) {
   
 
   // In tensor version, 'alpha' should always be 0 for best accuracy
 #elif TENSOR	
-double* bbfmm( vec3 *field, int Nf, vec3 *source, int Ns, double *sourceCharge, dof2 dof,
+double* bbfmm( vec3 *field, int Nf, vec3 *source, int Ns, double *sourceCharge, int2 dof,
 	       double boxLen, double alpha, int n, gridT grid_type,
 	       kernel_t kernel, int treeLevel, int lpbc,
 	       double epsilon ) {
 #endif
   
-  // return value
-  double *stressFmm = calloc( Ns*dof.s, sizeof(double) );
-    
-  nodeT *tree;    // Octree for FMM hierarchy
-  dof2 cutoff;    // Compression index of SVD
-  char Kmat[50];  // File name for kernel interaction matrix K
-  char Umat[50];  // File name for matrix of singular vectors U
-  char Vmat[50];  // File name for matrix of singular vectors V
 	
-  timeType t0, t1, t2;  // Time variables
-	
-  int n2 = n*n;         // n2 = n^2
-  int n3 = n2*n;        // n3 = n^3
+  timeType t0 = Timer();          // Begin pre-computation timing
 
-    
+
+  /* ---- Compute the Chebyshev weights and set up the lookup table ---- */
+
+  int n2 = n*n;          // n2 = n^2
+  int n3 = n2*n;         // n3 = n^3
+
+  int    Ktable[343];    // Cell index within three layers on every side: 7^3 = 343
   double Kweights[n3];   // Omega matrix 
   double Cweights[2*n2]; // Chebyshev interpolation coefficients: Sn (page 8715)
-  double Tkz[n2];        /* Evaluation of n chebyshev nodes (of T_n) on 
-			    n chebyshev polynomials from T_0 to T_{n-1} */
-  int Ktable[343];       // All the cells in consideration: 7^3 = 343
-	
+  double Tkz[n2];        // Evaluation of n chebyshev nodes (of T_n) on
+			 // n chebyshev polynomials from T_0 to T_{n-1}
+
+  ComputeWeights(Tkz,Ktable,Kweights,Cweights,n,alpha,grid_type);
+
+
+  /* ---- Build FMM tree ---- */  
+
+  nodeT  *tree;       // Octree for FMM hierarchy
+  tree = BuildTree(boxLen, treeLevel, n);
+
+
+  /* ---- Precompute M2L operator ---- */
     
-  t0 = Timer();          // Begin pre-computation timing
-
-
-  // Set up for FMM
-  FMMSetup(&tree, Tkz, Ktable, Kweights, Cweights, boxLen, alpha,
-	   &cutoff, n, kernel, epsilon, dof, Ns,
-	   treeLevel, Kmat, Umat, Vmat, grid_type);
-
-    
+  int2   cutoff;      // Compression index of SVD
   double *K  = NULL;  // K: C^{(i)} the compressed M2L operator 
   double *U  = NULL;  // U: U^k_r p. 8719; downward pass; field
   double *VT = NULL;  // V: S^K_r p. 8718; upward pass; source
-    	
-  // Read kernel interaction matrix K and singular vectors U and VT
-  FMMReadMatrices(&K, &U, &VT, cutoff, n, dof, Kmat, Umat, Vmat,
-		  treeLevel, kernel.homogen, grid_type);
+
+  GetM2L(Kweights, boxLen, alpha, &cutoff, n, kernel, epsilon, dof, Ns,
+	 treeLevel, &K, &U, &VT, grid_type);
     
+
+  
 #ifdef LINEINT
   // Compute the midpoint of every segment
   int i;
@@ -96,20 +82,26 @@ double* bbfmm( vec3 *field, int Nf, vec3 *source, int Ns, double *sourceCharge, 
   // Distribute the segments and field points, set up interaction list
   // and Computes the octree
     
-  FMMDistribute(&tree,field,midpoint,Nf,Ns,treeLevel);
+  FMMDistribute(tree,field,midpoint,Nf,Ns,treeLevel);
         
 #elif TENSOR
-  FMMDistribute(&tree,field,source,Nf,Ns,treeLevel);
+  FMMDistribute(tree,field,source,Nf,Ns,treeLevel);
 #endif
 
   // End pre-computation timing
-  t1 = Timer();
-	
+  timeType t1 = Timer();
+
+
+  /* ---- FMM computation ---- */
+  
+  // allocate the FMM result array
+  double *stressFmm = calloc( Ns*dof.s, sizeof(double) );
+      
 #ifdef LINEINT
 
   FMMCompute(&tree, field, Nf, segment, midpoint, burg, K, U, VT, Tkz,
 	     Ktable, Kweights, Cweights, cutoff, n, dof,
-	     numgau, alpha, stressFmm, grid_type,
+	     alpha, stressFmm, grid_type,
 	     boxLen, lpbc, kernel);
   free(midpoint);
         
@@ -122,17 +114,21 @@ double* bbfmm( vec3 *field, int Nf, vec3 *source, int Ns, double *sourceCharge, 
 #endif
 	
   // End FMM timing
-  t2 = Timer();
+  timeType t2 = Timer();
     	
-  // Free the allocated memory in the octree
+
+  /* ---- Free the resources ---- */
+  
   FMMCleanup(tree);
 
   free(K);
   if (U  != NULL)
-    free(U);
+    free(U );
   if (VT != NULL)
     free(VT);
-    
+
+  /* ---- Output timing results ---- */
+  
   printf("Pre-Comp Time : %f seconds\n", t1-t0);
   printf("FMM      Time : %f seconds\n", t2-t1);
 
@@ -140,178 +136,65 @@ double* bbfmm( vec3 *field, int Nf, vec3 *source, int Ns, double *sourceCharge, 
 }
 
 
-/*
- * Function: FMMSetup
- * -----------------------------------------------------------------
- * Prepare for the FMM calculation by setting the parameters, computing
- * the weight matrices, pre-computing the SVD (if necessary), reading 
- * in the necessary matrices, and building the FMM hierarchy.
- */
- void FMMSetup(nodeT **A, double *Tkz, int *Ktable, double *Kweights,
-	       double *Cweights, double boxLen, double alpha,
-	       dof2 *cutoff, int n, kernel_t kernel,
-	       double epsilon, dof2 dof, int Ns, int treeLevel, char
-	       *Kmat, char *Umat, char *Vmat, int grid_type) {
+// Builds the FMM hierarchy
+ nodeT* BuildTree(double boxLen, int treeLevel, int n) {
 
-    	
-   // Compute the Chebyshev weights and sets up the lookup table
-   ComputeWeights(Tkz,Ktable,Kweights,Cweights,n,alpha, grid_type);
+   vec3   center = {0, 0, 0};
+   nodeT* root   = NewNode(center, boxLen, n);
+   BuildFMMHierarchy(root, treeLevel, n);
 
-   // Builds the FMM hierarchy
-   vec3 center = {0, 0, 0};
-   (*A) = NULL;
-   NewNode(A, center, boxLen, n);
-   BuildFMMHierarchy(A, treeLevel, n);
-
-   /* ---- precompute file name ---- */
-    
-   char *dir = "precompute/"; 
-   create_directory(dir);
-
-   char *grid1 = "Cheby", *grid2 = "Unif";
-   if (grid_type == CHEBYSHEV) {
-     sprintf(Kmat,"%s%s%sK%da%.1f.bin", dir, kernel.name, grid1, n, alpha);
-     sprintf(Umat,"%s%s%sU%da%.1f.bin", dir, kernel.name, grid1, n, alpha);
-     sprintf(Vmat,"%s%s%sV%da%.1f.bin", dir, kernel.name, grid1, n, alpha);
-   } else {
-     sprintf(Kmat,"%s%s%sK%da%.1f.bin", dir, kernel.name, grid2, n, alpha);
-     sprintf(Umat,"Readme.txt"); // uniform grid does not have U or V file
-     sprintf(Vmat,"Makefile");   // just make sure thest two files exist
-   }
-	
-
-   if ( !precompute_files_usable(Kmat, Umat, Vmat, kernel.homogen, boxLen, treeLevel, grid_type) ) {
-     generate_precompute_files( boxLen, treeLevel, n, dof, kernel, Kmat, Umat, Vmat, alpha, Kweights, epsilon, grid_type );
-   }
-   
-   // set cutoff    
-   if (grid_type == UNIFORM) {
-       
-     cutoff->f = dof.f*n*n*n;
-     cutoff->s = dof.s*n*n*n;
-     
-   } else {
-   
-     FILE *fU = fopen(Umat,"rb");
-     FILE *fV = fopen(Vmat,"rb");
-     READ_CHECK( fread(&(cutoff->f), sizeof(int), 1, fU), 1 );
-     READ_CHECK( fread(&(cutoff->s), sizeof(int), 1, fV), 1 );
-     fclose(fU);
-     fclose(fV);
-   }
-
-      
-   //Read_Cutoff(cutoff, Umat, Vmat);
-
-   /*
-   if (grid_type == CHEBYSHEV) {
-
-     FILE *fK, *fU, *fV;
-     fK = fopen(Kmat, "rb");
-     fU = fopen(Umat, "rb");
-     fV = fopen(Vmat, "rb");
-	 
-     if (fK == NULL || fU == NULL || fV == NULL) { // Create files
-       if (fK!=NULL) 
-	 fclose(fK);
-       if (fU!=NULL)
-	 fclose(fU);
-       if (fV!=NULL)
-	 fclose(fV);
-	     
-       printf("Precompute files do not exist, creating now ...\n");
-	     
-       if (kernel.homogen > 1e-3) { // homogeneous kernel
-		 
-	 ComputeKernelSVD(Kweights, n, kernel, epsilon, dof,
-			  Kmat, Umat, Vmat, alpha, 1.0);
-		 
-       } else { // non-homogeneous kernel
-	 // Open new files for writing boxLen and treeLevel
-		 
-	 fK = fopen(Kmat, "wb");
-	 fwrite(&boxLen, sizeof(double), 1, fK);
-	 fwrite(&treeLevel, sizeof(int), 1, fK);
-	 fclose(fK);	     
-		 
-		 
-	 double boxLenLevel = boxLen/4; // first FMM level and
-	 // FMM starts from the second level
-	 int j;
-	 for (j=2; j<=treeLevel; j++, boxLenLevel/=2)
-	   ComputeKernelSVD(Kweights, n, kernel, epsilon, dof,
-			    Kmat, Umat, Vmat, alpha, boxLenLevel);
-       }
-     } // create files
-      
-     else if (kernel.homogen < 1e-3) { // files exist, check if usable
-	     
-       double fileBoxLen;
-       int fileTreeLevel;
-       READ_CHECK( fread(&fileBoxLen, sizeof(double), 1, fK), 1 );
-       READ_CHECK( fread(&fileTreeLevel, sizeof(int), 1, fK), 1 );
-       fclose(fK);
-       fclose(fU);
-       fclose(fV);
-	
-       if (fabs(boxLen-fileBoxLen) > 1e-2 ||
-	   treeLevel != fileTreeLevel) {
-		 
-	 printf("Recreating pre-compute files now ...\n");
-		 
-	 fK = fopen(Kmat, "wb");
-	 fwrite(&boxLen, sizeof(double), 1, fK);
-	 fwrite(&treeLevel, sizeof(int), 1, fK);
-	 fclose(fK);	     
-	  
-	 int i;
-	 double boxLenLevel = boxLen/4;
-	 for (i=2; i<=treeLevel; i++, boxLenLevel/=2)
-	   ComputeKernelSVD(Kweights, n, kernel, epsilon, dof,
-			    Kmat, Umat, Vmat, alpha, boxLenLevel);
-       }
-
-     }
-     else { // files exist and the kernel is homogeneous
-       fclose(fU);
-       fclose(fV);
-       fclose(fK);
-       printf("Reading precompute files ...\n");
-     }
-	 
-	 
-     fU = fopen(Umat,"rb");
-     READ_CHECK( fread(&(cutoff->f), sizeof(int), 1, fU), 1 );
-     fclose(fU);
-	 
-     fV = fopen(Vmat,"rb");
-     READ_CHECK( fread(&(cutoff->s), sizeof(int), 1, fV), 1 );
-     fclose(fV);	
-	 
-   } else if (grid_type == UNIFORM) { // uniform grids
-	 
-     FILE *kfile = fopen(Kmat, "rb");
-     if (!kfile) {
-	
-       printf("The precompute file do not exit, creating now ...\n");
-       ComputeKernelUniformGrid(n, dof, kernel.kfun,
-				Kmat, alpha, 1.0);
-     } else {
-       printf("Reading the precompute file ...\n");
-       fclose(kfile);
-     }
-
-     cutoff->f = dof.f*n*n*n;
-     cutoff->s = dof.s*n*n*n;
-   }
-   */
+   return root;
  }
+
+ 
+/*
+ * Function: ComputeM2L
+ * -----------------------------------------------------------------
+ * Prepare for the FMM calculation by pre-computing the SVD (if necessary),
+ * and reading in the necessary matrices.
+ */
+ void GetM2L(double *Kweights, double boxLen, double alpha,
+	     int2 *cutoff, int n, kernel_t kernel,
+	     double epsilon, int2 dof, int Ns, int treeLevel,
+	     double **K, double **U, double **VT, int grid_type) {
+
+   
+   char *dir_name = "precompute/"; 
+   create_directory( dir_name );
+
+   char Kmat[50];
+   char Umat[50];
+   char Vmat[50];
+   char *grid1 = "Cheb";
+   char *grid2 = "Unif";
+
+   
+   if (grid_type == CHEBYSHEV) {
+     sprintf(Kmat,"%s%s%sK%da%.1f.bin", dir_name, kernel.name, grid1, n, alpha);
+     sprintf(Umat,"%s%s%sU%da%.1f.bin", dir_name, kernel.name, grid1, n, alpha);
+     sprintf(Vmat,"%s%s%sV%da%.1f.bin", dir_name, kernel.name, grid1, n, alpha);
+   } else {
+     sprintf(Kmat,"%s%s%sK%da%.1f.bin", dir_name, kernel.name, grid2, n, alpha);
+     sprintf(Umat,"Readme.txt"); // uniform grid does not have U or V file,
+     sprintf(Vmat,"Makefile");   // so just make sure thest two files exist
+   }
+	
+
+   if ( !PrecomputeAvailable(Kmat, Umat, Vmat, kernel.homogen, boxLen, treeLevel, grid_type) ) {
+     StartPrecompute( boxLen, treeLevel, n, dof, kernel, Kmat, Umat, Vmat, alpha, Kweights, epsilon, grid_type );
+   }
+   
+   // Read kernel interaction matrix K and singular vectors U and VT
+   FMMReadMatrices(K, U, VT, cutoff, n, dof, Kmat, Umat, Vmat,
+		   treeLevel, kernel.homogen, grid_type);
+
+}
 
 
 // check if the precompute files exist or if the existing files are usable
-bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
-			      double homogen, double boxLen,
-			      int treeLevel, int grid_type ) {
+bool PrecomputeAvailable( char *Kmat, char *Umat, char *Vmat,
+			  double homogen, double boxLen,
+			  int treeLevel, int grid_type ) {
   
   FILE *fK, *fU, *fV;
   fK = fopen(Kmat, "rb");
@@ -348,7 +231,7 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
 }
 
 
- void generate_precompute_files(double boxLen, int treeLevel, int n, dof2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double alpha, double *Kweights, double epsilon, int grid_type) {
+ void StartPrecompute(double boxLen, int treeLevel, int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double alpha, double *Kweights, double epsilon, int grid_type) {
 
   printf("Generate precompute file ...\n");
   FILE *fK = fopen(Kmat, "wb");
@@ -374,30 +257,29 @@ bool precompute_files_usable( char *Kmat, char *Umat, char *Vmat,
 }
 
 
- void compute_m2l_operator (int n, dof2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double l, double alpha, double *Kweights, double epsilon, int grid_type) {
+ void compute_m2l_operator (int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double l, double alpha, double *Kweights, double epsilon, int grid_type) {
 
   switch (grid_type) {
       
   case UNIFORM:
-    ComputeKernelUniformGrid(n, dof, kernel.kfun, Kmat,
-			     alpha, l);
+    ComputeKernelUnif(n, dof, kernel.kfun, Kmat, alpha, l);
     break;
   case CHEBYSHEV:
-    ComputeKernelSVD(Kweights, n, kernel, epsilon, dof,
-		     Kmat, Umat, Vmat, alpha, l);
+    ComputeKernelCheb(Kweights, n, kernel, epsilon, dof,
+		      Kmat, Umat, Vmat, alpha, l);
     break;
   }
 }
 
  
-  /*
-   * Function: FMMReadMatrices
-   * ------------------------------------------------------------------
-   * Read in the kernel interaction matrix M and the matrix of singular
-   * vectors U.
-   */
-void FMMReadMatrices(double **K, double **U, double **VT, dof2 cutoff,
-		     int n, dof2 dof, char *Kmat, char *Umat,
+ /*
+  * Function: FMMReadMatrices
+  * ------------------------------------------------------------------
+  * Read in the kernel interaction matrix M and the matrix of singular
+  * vectors U.
+  */
+void FMMReadMatrices(double **K, double **U, double **VT, int2 *cutoff,
+		     int n, int2 dof, char *Kmat, char *Umat,
 		     char *Vmat, int treeLevel, double homogen,
 		     int grid_type) {
 
@@ -406,75 +288,83 @@ void FMMReadMatrices(double **K, double **U, double **VT, dof2 cutoff,
     preCompLevel = treeLevel - 1;
   else
     preCompLevel = 1;
+  
 
   unsigned long long Ksize;
-  if (grid_type == UNIFORM)
+  int Usize;
+  int Vsize;
+  
+  if (grid_type == UNIFORM) {
+       
+    cutoff->f = dof.f*n*n*n;
+    cutoff->s = dof.s*n*n*n;
+
     Ksize = 316*(2*n-1)*(2*n-1)*(2*n-1)*dof.s*dof.f * preCompLevel;
-  else
-    Ksize = 316 * cutoff.f*cutoff.s * preCompLevel;
-
-  assert(Ksize > 0); // check over flow
-  *K = malloc(Ksize *sizeof(double));
     
-  
-  FILE *fK  = fopen(Kmat, "rb");
-  fseek(fK, 1*sizeof(int) + 1*sizeof(double), SEEK_SET); // skip 'tree level' and 'box length'
-  READ_CHECK( fread(*K, sizeof(double), Ksize, fK), Ksize );
-  fclose(fK);
-  
-
-  if (grid_type == CHEBYSHEV) { // reak 'U' and 'V'
-
-    int Usize = cutoff.f * dof.f *n*n*n* preCompLevel;
-    int Vsize = cutoff.s * dof.s *n*n*n* preCompLevel;
-
-    *U  = (double *)malloc(Usize *sizeof(double)); 
-    *VT = (double *)malloc(Vsize *sizeof(double));
+  } else if (grid_type == CHEBYSHEV) { // read 'U' and 'V'
     
     FILE *fU = fopen(Umat,"rb"); 
     FILE *fV = fopen(Vmat,"rb");
-    fseek(fU, 1*sizeof(int), SEEK_SET); // skip 'cutoff'
-    fseek(fV, 1*sizeof(int), SEEK_SET); // skip 'cutoff'
+
+    READ_CHECK( fread(&(cutoff->f), sizeof(int), 1, fU), 1 );
+    READ_CHECK( fread(&(cutoff->s), sizeof(int), 1, fV), 1 );
+
+    Usize = cutoff->f * dof.f * n*n*n * preCompLevel;
+    Vsize = cutoff->s * dof.s * n*n*n * preCompLevel;
+    Ksize = 316 * cutoff->f*cutoff->s * preCompLevel;
+    
+    *U  = (double *)malloc(Usize *sizeof(double)); 
+    *VT = (double *)malloc(Vsize *sizeof(double));
+    
     READ_CHECK( fread(*U,  sizeof(double), Usize, fU), Usize );
     READ_CHECK( fread(*VT, sizeof(double), Vsize, fV), Vsize );
+
     fclose(fU);
     fclose(fV);
-  }
+    
+  } else
+    assert(false);
+
+  
+  FILE *fK  = fopen(Kmat, "rb");
+  assert(Ksize > 0); // check over flow
+  *K = malloc(Ksize *sizeof(double));    
+  fseek(fK, 1*sizeof(int) + 1*sizeof(double), SEEK_SET); // skip 'tree level' and 'box length'
+  READ_CHECK( fread(*K, sizeof(double), Ksize, fK), Ksize );
+  fclose(fK);
+
 }
 
+ 
 /*
  * Function: FMMDistribute
  * ------------------------------------------------------------------
  * Distribute the field points and sources to the appropriate location
  * in the FMM hierarchy and sets up the interaction list.
  */
- void FMMDistribute(nodeT **A, vec3 *field, vec3 *source, int Nf, 
+ void FMMDistribute(nodeT *A, vec3 *field, vec3 *source, int Nf, 
 		    int Ns, int level) {
-   int i;
-   vec3 cshift;
-   int *fieldlist, *sourcelist;
-   fieldlist = (int *)malloc(Nf * sizeof(int));
-   sourcelist = (int *)malloc(Ns * sizeof(int));  
+
+   int *fieldlist  = (int *)malloc(Nf * sizeof(int));
+   int *sourcelist = (int *)malloc(Ns * sizeof(int));  
 	
    // Initialize the point distribution for the root node
+   int i;
    for (i=0;i<Nf;i++)
-     fieldlist[i] = i;
+     fieldlist[i]  = i;
    for (i=0;i<Ns;i++)
      sourcelist[i] = i;
-   (*A)->Nf = Nf;
-   (*A)->Ns = Ns;
+   A->Nf = Nf;
+   A->Ns = Ns;
      
-   // Distribute all of the sources and field points to the appropriate cell
+   // Distribute all of the source and field points to the appropriate cell
    DistributeFieldPoints(A,field,fieldlist,level);
    DistributeSources(A,source,sourcelist,level);
 	
    // Construct the interaction list for the entire octree
-   (*A)->neighbors[0] = *A;
-   (*A)->ineigh = 1;
-   cshift.x = 0;
-   cshift.y = 0;
-   cshift.z = 0;
-   (*A)->cshiftneigh[0] = cshift;
+   A->neighbors[0] = A;
+   A->ineigh = 1;
+   A->cshiftneigh[0] = (vec3){0, 0, 0};
    InteractionList(A,level);  // build the interaction that need to be computed
 	
    free(fieldlist);
@@ -492,7 +382,7 @@ void FMMReadMatrices(double **K, double **U, double **VT, dof2 cutoff,
 		 midpoint, double *burg, double *K, double *U,
 		 double *VT, double *Tkz, int *Ktable,
 		 double *Kweights, double *Cweights,
-		 dof2 cutoff, int n, dof2 dof, int numgau, double alpha,
+		 int2 cutoff, int n, int2 dof, double alpha,
 		 double *phi, int grid_type, double boxLen, int lpbc,
 		 kernel_t kernel) {
     
@@ -500,12 +390,14 @@ void FMMReadMatrices(double **K, double **U, double **VT, dof2 cutoff,
    // Loop over the level - Keep that - Tkz : info about Chebychev's coeffs.
    // Independent of the Kernel
    // Compute the Guassian quadrature points and weights
-   double *gpoint  = (double *) malloc(numgau * sizeof(double));
-   double *gweight = (double *) malloc(numgau * sizeof(double));
+   double *gpoint  = (double *) malloc(NUMGAUSS * sizeof(double));
+   double *gweight = (double *) malloc(NUMGAUSS * sizeof(double));
    gqwp(numgau, gpoint, gweight);
     
+
+   printf("Begin upward pass ...\n");
    UpwardPass(A, segment, midpoint, Cweights, Tkz, burg, n,
-	      dof.s, numgau, gpoint, gweight, alpha, grid_type); //, boxLen, kernel.homogen, lpbc, kernel.kfun);
+	      dof.s, gpoint, gweight, alpha, grid_type);
     
     
    free(gpoint);
@@ -513,54 +405,58 @@ void FMMReadMatrices(double **K, double **U, double **VT, dof2 cutoff,
     
 #elif TENSOR
     
-   void FMMCompute(nodeT **A, vec3 *field, int Nf, vec3 *source,
-		   double *q, 
-		   double *K, double *U, double *VT, double *Tkz,
-		   int *Ktable, double *Kweights, double *Cweights,
-		   dof2 cutoff, int n, dof2 dof, double alpha, 
-		   double *phi, int grid_type, double boxLen, int lpbc,
-		   kernel_t kernel) {
-                                
-     UpwardPass(A, source, q, Cweights, Tkz, cutoff,
-		n, dof.s, grid_type);
+void FMMCompute(nodeT **A, vec3 *field, int Nf, vec3 *source,
+		double *q, 
+		double *K, double *U, double *VT, double *Tkz,
+		int *Ktable, double *Kweights, double *Cweights,
+		int2 cutoff, int n, int2 dof, double alpha, 
+		double *phi, int grid_type, double boxLen, int lpbc,
+		kernel_t kernel) {
+
+  printf("Begin upward pass ...\n");
+  UpwardPass(A, source, q, Cweights, Tkz, cutoff,
+	     n, dof.s, grid_type);
         
 #endif
+  
+
+  print_array((*A)->sourceval, n*n*n, "root val");
+    
+  AddPBC( lpbc, (*A)->sourceval, &((*A)->fieldval), phi, Nf,
+	  n, dof, boxLen, alpha, Tkz, kernel, grid_type );
+
+  // Compute cell interactions.
+  // '0' for the root in the FMM tree
+  printf("Begin M2L ...\n");
+  FMMInteraction(A, K, Ktable, U, VT, Kweights, n, dof, cutoff,
+		 kernel.homogen, 0, grid_type);  
 
 
-     //printf("UpwardPass finished.\n");
-     AddPBC( lpbc, (*A)->sourceval, &((*A)->fieldval), phi, Nf,
-	     n, dof, boxLen, alpha, Tkz, kernel, grid_type );
-
-     // Computes all of the cell interactions, 0 for the root level in the
-     // FMM tree
-     FMMInteraction(A, K, Ktable, U, VT, Kweights, n, dof, cutoff,
-		    kernel.homogen, 0, grid_type);  
-
-     //printf("M2L finished.\n");
-      
+  printf("Begin downward pass ...\n");
+  
 #ifdef LINEINT
-     // Downward pass
-     DownwardPass(A,field,Cweights,Tkz,n,dof.f, alpha, phi, grid_type);
+  // Downward pass
+  DownwardPass(A,field,Cweights,Tkz,n,dof.f, alpha, phi, grid_type);
         
 #elif TENSOR
-     DownwardPass(A, field, source, Cweights, Tkz, q, cutoff, n, dof,
-		  alpha, kernel.kfun, phi, grid_type);
+  DownwardPass(A, field, source, Cweights, Tkz, q, cutoff, n, dof,
+	       alpha, kernel.kfun, phi, grid_type);
         
 #endif
       
-   }
+}
 
 
-   /*
-    * Function: FMMCleanup
-    * ------------------------------------------------------------------
-    * Cleans up after FMM calculation.
-    */
-   void FMMCleanup(nodeT *A) {
+/*
+ * Function: FMMCleanup
+ * ------------------------------------------------------------------
+ * Cleans up after FMM calculation.
+ */
+ void FMMCleanup(nodeT *A) {
 
-     FreeNode(A);
-     fftw_cleanup();
-   }
+   FreeNode(A);
+   fftw_cleanup();
+ }
 
    /*
     * Function: ReadParam
@@ -693,20 +589,20 @@ void FMMReadMatrices(double **K, double **U, double **VT, dof2 cutoff,
     */
 
 
-    /* Input:
-     * 	sourcelist - index of the source (segment) point
-     * 	num - number of gaussian points used
-     * Output:
-     * 	sourcet - Gauss points along the segments transformed into a unit cube
-     *	xi - Jacobi of the integral
-     */ 
+ /* Input:
+  * 	sourcelist - index of the source (segment) point
+  * 	num - number of gaussian points used
+  * Output:
+  * 	sourcet - Gauss points along the segments transformed into a unit cube
+  *	xi - Jacobi of the integral
+  */ 
 void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
-		  *sourcelist, int num, double *gpoint, double L, vec3
+		  *sourcelist, double *gpoint, double L, vec3
 		  scenter, vec3 *sourcet, double *xi){
   
 
   vec3 *source;
-  source = (vec3 *) malloc(num * Ns * sizeof(vec3));
+  source = (vec3 *) malloc(NUMGAUSS * Ns * sizeof(vec3));
   vec3 p1, p2, midpt;
 
   double lx, ly, lz;
@@ -729,7 +625,7 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
     lz = xi[3*i+2];
 
     // Gaussian points along the segment
-    for (j=0; j<num; j++, count++) {
+    for (j=0; j<NUMGAUSS; j++, count++) {
       source[count].x = midpt.x + gpoint[j] * lx;
       source[count].y = midpt.y + gpoint[j] * ly;
       source[count].z = midpt.z + gpoint[j] * lz;
@@ -738,7 +634,7 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 
   // Map all of the source points to the box ([-1 1])^3
   double ihalfL = 2.0 / L;
-  int numSource = Ns * num;
+  int numSource = Ns * NUMGAUSS;
 
   for (j=0;j<numSource;j++) {
     sourcet[j].x = ihalfL*(source[j].x - scenter.x);
@@ -754,158 +650,15 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 
   free(source);		
 }
-
-    
-/*
- * Function: EvaluateKernel
- * -------------------------------------------------------------------
- * Evaluates the kernel given a source and a field point.
- * Anisotropic stress function implemented here.
- */
- void EvaluateKernel(vec3 fieldpos, vec3 sourcepos,
-		     paraAniso *AnisoParameters, double *K, dof2 dof) {
-	
-   /*********************************
-    *    LAPLACIAN KERNEL (1/r)     *
-    *********************************/
-#ifdef LAPLACIAN
-   vec3 diff;
-   double rinv;
-	
-   // Compute 1/r
-   diff.x = sourcepos.x - fieldpos.x;
-   diff.y = sourcepos.y - fieldpos.y;
-   diff.z = sourcepos.z - fieldpos.z;
-   rinv   = 1./sqrt(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
-     
-   // Result = 1/r
-   *K = rinv;
-
-#elif GAUSSIAN
-   /*********************************
-    *    GAUSSIAN KERNEL (exp(-r^2))     *
-    *********************************/
-   vec3 diff;
-	
-   // Compute r
-   diff.x = sourcepos.x - fieldpos.x;
-   diff.y = sourcepos.y - fieldpos.y;
-   diff.z = sourcepos.z - fieldpos.z;
-
-   double r = sqrt(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
-   *K = exp(-r*r);
-
-#elif POLYNOMIAL
-   vec3 diff;
-   double rinv;
-	
-   diff.x = sourcepos.x - fieldpos.x;
-   diff.y = sourcepos.y - fieldpos.y;
-   diff.z = sourcepos.z - fieldpos.z;
-   rinv   = 1./sqrt(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
-	
-   int i, j, i0, j0, k0, count=0;
-   for (i=0; i<9; i++) {
-     i0 = i%3;
-     for (j=0; j<6; j++, count++) {
-       j0 = (i+j)%2;
-       k0 = 3 - i0 - j0;
-       K[count] = pow(diff.x, i0) * pow(diff.y, j0) * pow(diff.z, k0);
-     }
-   }
-
-   /****************************************************
-    * LAPLACIAN FORCE (r.x/r^3) - only the x-component *
-    ****************************************************/
-#elif LAPLACIANFORCE
-   vec3 diff;
-   double rinv;
-	
-   // Compute 1/r
-   diff.x = sourcepos.x - fieldpos.x;
-   diff.y = sourcepos.y - fieldpos.y;
-   diff.z = sourcepos.z - fieldpos.z;
-   rinv   = 1./sqrt(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
-	
-   // Result = r.x/r^3
-   //*K = diff.x*diff.x*diff.x * rinv*rinv*rinv*rinv*rinv;
-   //*K = diff.x * rinv*rinv*rinv;
-   int idof, dof2 = dof.f*dof.s;
-   double axis;
-   for (idof=0; idof < dof2; idof++) {
-     //for (idof=0; idof < 1; idof++) {
-     if (idof%3 == 0)
-       axis = diff.x;
-     else if (idof%3 == 1)
-       axis = diff.y;
-     else
-       axis = diff.z;
-
-     //K[idof] = axis * rinv*rinv*rinv;
-     K[idof] = axis*axis*axis * rinv*rinv*rinv*rinv*rinv;
-
-     //printf("%f\t", K[idof]);
-     //K[idof] = diff.x*diff.x*diff.x + diff.y*diff.y*diff.y + diff.z*diff.z*diff.z;
-   }
-	
-   /*********************
-    *    1/r^4 KERNEL   *
-    *********************/
-#elif ONEOVERR4
-   vec3 diff;
-   double rinv;
-	
-   // Compute 1/r
-   diff.x = sourcepos.x - fieldpos.x;
-   diff.y = sourcepos.y - fieldpos.y;
-   diff.z = sourcepos.z - fieldpos.z;
-   rinv   = 1./sqrt(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
-	
-   // Result = 1/r^4
-   *K = rinv*rinv*rinv*rinv;
-	
-   /*********************************
-    *    DD ANISOTROPIC KERNEL        *
-    *********************************/
-#elif DDANISO
-	
-   /*
-     For the anisotropic kernel, K has size dof.f x dof.s (6 x 9).
-     K is stored in column-major format.
-   */
-
-   // check kernel dimension
-   if (dof.f != 6 || dof.s != 9) {
-     printf("Wrong dimension for Aniso kernel!");
-     exit(-1);
-   }
-
-   //printf("e3[2]:%f\n", AnisoParameters->e3[2]);
-   //assert(AnisoParameters->e3[2] == 1);
-
-   //printf("Inside EvaluateKernel()\n");
-   ChaoStress(fieldpos.x, fieldpos.y, fieldpos.z, sourcepos.x,
-	      sourcepos.y, sourcepos.z, AnisoParameters->qMax,
-	      AnisoParameters->ind1Re, AnisoParameters->ind2Re,
-	      AnisoParameters->ind1Im, AnisoParameters->ind2Im,
-	      AnisoParameters->ReFqout, AnisoParameters->ImFqout,
-	      AnisoParameters->sizeReFq, AnisoParameters->sizeImFq,
-	      AnisoParameters->e12, AnisoParameters->e3,
-	      AnisoParameters->C633, AnisoParameters->CdGdx, K);
-        
-    
-#endif	
- }
-
+   
 
  /*
   * Function: EvaluateKernelCell
   * -------------------------------------------------------------------
-  * Evaluates the kernel for interactions between a pair of cells.
-  * M2L operator initialization
+  * Evaluate the kernel for interactions between a pair of cells.
   */
  void EvaluateKernelCell(vec3 *field, vec3 *source, int Nf, 
-			 int Ns, dof2 dof, kfun_t kfun,
+			 int Ns, int2 dof, kfun_t kfun,
 			 double *kernel) {
   
    int i, j, k, l, count, count_kernel;
@@ -918,14 +671,14 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 	
    for (j=0;j<Ns;j++) {
      for (i=0;i<Nf;i++) {
-       //EvaluateKernel(field[i], source[j], kfun, Kij, dof);
+
        kfun(&field[i], &source[j], Kij);
 			
        count_kernel = dof_f * i + LDA_kernel * dof_s * j;
        count = 0;			
        for (k=0;k<dof_s;k++)
 	 for (l=0;l<dof_f;l++, count++)
-	   /* Column-major storage */
+	   // Column-major storage
 	   kernel[count_kernel + k * LDA_kernel + l] = Kij[count];
      }
    }
@@ -935,7 +688,7 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
  /*
   * Function: EvaluateField
   * -------------------------------------------------------------------
-  * Evaluates the field due to interactions between a pair of cells.
+  * Evaluate the field due to interactions between a pair of cells.
   * P2P kernel.
   * Compute K*q
   * K is (dof->f*Nf) x (dof->s*Ns)
@@ -944,7 +697,7 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
   * so the result fieldval[Nf][dof->f] is also in row major
   */
  void EvaluateField(vec3 *field, vec3 *source, double *q, int Nf,
-		    int Ns, dof2 dof, kfun_t kfun, double *fieldval) {
+		    int Ns, int2 dof, kfun_t kfun, double *fieldval) {
           
 
    int i, j, k, l, count, count_kernel;
@@ -983,8 +736,6 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
    char trans = 'n';
 
    dgemv_(&trans, &LDA, &N, &alpha, Kcell, &LDA, q, &incr, &beta, fieldval, &incr);
-
-   //printf("Field value:\n");
     
    free(Kcell);
  }
@@ -992,36 +743,31 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
  /*
   * Function: ComputeWeights
   * ------------------------------------------------------------------
-  * Computes the weights for the Chebyshev nodes of all children cells
+  * Compute the weights for the Chebyshev nodes of all children cells
   * (identical for all cells and all levels so just compute once and
   * store in memory) and set up the lookup table.
   */
  void ComputeWeights(double *Tkz, int *Ktable, double *Kweights, 
 		     double *Cweights, int n, double alpha, int grid_type) {
-     
-   int i, k, l1, l2, l3, count;
-   double tmp1, tmp2;
-   vec3 vtmp;
-	
-   int n3 = n*n*n;    // n3 = n^3
-   int Nc = 2*n3;     // Number of child Chebyshev nodes
 
+   int  n3 = n*n*n;    // n3 = n^3
+   int  Nc = 2*n3;     // Number of child Chebyshev nodes
    vec3 fieldt[Nc];   // Chebyshev-transformed coordinates
    vec3 Sn[n*Nc];
 
    // lookup table for M2L
    Create_lookup_table(Ktable);
       
-
-   double nodes[n];
-   GridPos1d(0, 1.0, n, grid_type, nodes);
-      
    ComputeTkz( Tkz, n );
       
-   // Compute the weights for the kernel matrix K
-   count = 0;
+   // Weights for the SVD compressed matrix
+   int    l1, l2, l3;
+   int    count = 0;
+   double tmp1;
+   double tmp2;
+   double nodes[n];
+   GridPos1d(0, 1.0, n, grid_type, nodes);
    if (grid_type == CHEBYSHEV) {
-	
      for (l1=0;l1<n;l1++) {
        tmp1 = 1./sqrt(1-nodes[l1]*nodes[l1]);
        for (l2=0;l2<n;l2++) {
@@ -1048,14 +794,14 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
    // scaled parent box: (1+alpha)*4
    // ihalfL: 1/((1+alpha)*2)
    // so the relative position is: (nodes[i] +- 1/(1+alpha)) / 2
-   k = 0;
+   int    i;
+   int    k    = 0;
    double L    = AdjustBoxSize(1, alpha);
    double half = 1.0/2.0; // the parent box is divided into two children in each dimension
+   vec3   vtmp = {-1, -1, 0};
    for (i=0;i<2;i++) {
-     // Determine the mapping function for the specific child cell
-     vtmp.x = -1;
-     vtmp.y = -1;
-		
+
+     // mapping function for each child cell
      if (i == 0)
        vtmp.z = -1;
      else
@@ -1096,22 +842,22 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 
      
  /*
-  * Function: ComputeKernelSVD
+  * Function: ComputeKernelCheb
   * -------------------------------------------------------------
   * Computes the kernel for 316n^6 interactions between Chebyshev nodes
   * and then computes the SVD of the kernel matrix.
   * Note: this routine utilizes the anti-symmetry of the kernel
   */
- void ComputeKernelSVD(double *Kweights, int n, kernel_t
-		       kernel, double epsilon, dof2 dof, char
-		       *Kmat, char *Umat, char *Vmat,
-		       double alphaAdjust, double boxLen) {
-
+ void ComputeKernelCheb(double *Kweights, int n, kernel_t
+			kernel, double epsilon, int2 dof, char
+			*Kmat, char *Umat, char *Vmat,
+			double alphaAdjust, double boxLen) {
+   
    kfun_t kfun = kernel.kfun;
    int symm    = kernel.symm;
       
    static int callTime = -1;
-   callTime += 1; // callTime = 0 for the first time called
+   callTime++; // callTime = 0 for the first time called
 
    int i, j, l, m, m1, k1, k2, k3, l1, z;
    int count, count1, count2, count3;
@@ -1122,7 +868,7 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
    int dofn3_f = dof.f * n3;
    int dof2n6 = dofn3_s * dofn3_f; // Total size
    int Sigma_size;
-   dof2 cutoff;
+   int2 cutoff;
 	
    double *K0, *U0, *Sigma, *VT0;
    double *ker, *work;
@@ -1436,23 +1182,18 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 
    for (z = 0; z < 316; ++z)
      free(Kcell[z]);
-
-   // number of times called by FMMSetup(). Used in non-homogeneous
-   // kernel
-   //static int funCall = 0;
-   //funCall += 1;
      
  }
 
 
  /*
-  * Function: ComputeKernelUniformGrid
+  * Function: ComputeKernelUnif
   * ------------------------------------------------------------------
   * Computes the kernel for 316(2n-1)^3 interactions between Uniform
-  * Grid nodes. Does not compute SVD.
+  * Grid nodes.
   */
- void ComputeKernelUniformGrid(int n, dof2 dof, kfun_t kfun, char *Kmat,
-			       double alphaAdjust, double len) {
+ void ComputeKernelUnif(int n, int2 dof, kfun_t kfun, char *Kmat,
+			double alphaAdjust, double len) {
       
    int i, k1, k2, k3, l1, l2, l3;
    vec3 scenter;
@@ -1557,30 +1298,32 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
   * initializes the quantities in the node.
   *
   */
- void NewNode(nodeT **A, vec3 center, double L, int n) {
+ nodeT* NewNode(vec3 center, double L, int n) {
 	
    // Initialization
-   *A = (nodeT *)malloc(sizeof(nodeT));
+   nodeT *A = (nodeT *)malloc(sizeof(nodeT));
 	
    // Initializes the child, neighbor, interaction, and parent nodes to NULL
    int i;	
    for (i=0;i<8;i++)
-     (*A)->leaves[i] = NULL;
-   (*A)->parent = NULL;
+     A->leaves[i] = NULL;
+   A->parent = NULL;
 	
-   (*A)->fieldval  = NULL;
-   (*A)->sourceval = NULL;
-   (*A)->proxysval = NULL;
-   (*A)->sourcefre = NULL;
+   A->fieldval   = NULL;
+   A->sourceval  = NULL;
+   A->proxysval  = NULL;
+   A->sourcefre  = NULL;
 
-   (*A)->fieldlist  = NULL;
-   (*A)->sourcelist = NULL;
-   (*A)->center     = center;
-   (*A)->length     = L;
-   (*A)->Nf         = 0;
-   (*A)->Ns         = 0;
-   (*A)->ineigh     = 0;
-   (*A)->iinter     = 0;
+   A->fieldlist  = NULL;
+   A->sourcelist = NULL;
+   A->center     = center;
+   A->length     = L;
+   A->Nf         = 0;
+   A->Ns         = 0;
+   A->ineigh     = 0;
+   A->iinter     = 0;
+
+   return A;
  }
 
  /*
@@ -1589,17 +1332,17 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
   * Builds the FMM hierarchy with l levels.
   *
   */
- void BuildFMMHierarchy(nodeT **A, int level, int n) {
-   int i;
+ void BuildFMMHierarchy(nodeT *A, int level, int n) {
+   
    double L, halfL, quarterL;
    vec3 center, left, right;
 	
    if (level > 0) {
      // Compute the length and center coordinate of the children cells
-     L        = (*A)->length;
+     L        = A->length;
      halfL    = 0.5*L;
      quarterL = 0.25*L;
-     center   = (*A)->center;
+     center   = A->center;
      left.x   = center.x - quarterL;
      left.y   = center.y - quarterL;
      left.z   = center.z - quarterL;
@@ -1608,6 +1351,7 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
      right.z  = center.z + quarterL;    
 		
      // Add children nodes to node A
+     int i;
      for (i=0;i<8;i++) {
        // Determine the center of the child cell
        if (i<4) {
@@ -1633,16 +1377,15 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 	 center.z = right.z;
 			
        // Create the child cell
-       NewNode(&((*A)->leaves[i]),center,halfL,n);
-       (*A)->leaves[i]->parent = *A;
+       A->leaves[i] = NewNode(center,halfL,n);
+       A->leaves[i]->parent = A;
      }
 		
      // Recursively build octree if there is a subsequent level
      for (i=0;i<8;i++)
-       BuildFMMHierarchy(&((*A)->leaves[i]),level-1,n);
+       BuildFMMHierarchy(A->leaves[i],level-1,n);
    }
  }
-
 
 	
  /*
@@ -1651,10 +1394,10 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
   * Distributes all of the field points to the appropriate cell at the 
   * bottom of the octree.
   */
- void DistributeFieldPoints(nodeT **A, vec3 *field, int *fieldlist, 
+ void DistributeFieldPoints(nodeT *A, vec3 *field, int *fieldlist, 
 			    int levels) {
    int i, j, k, m, z;
-   int Nf = (*A)->Nf;
+   int Nf = A->Nf;
    vec3 point, center;
    int *fieldcell[8], *F;
    for (z = 0; z < 8; z++)
@@ -1662,7 +1405,7 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 	
    if (levels > 0) {
      // Obtain the center of the cell
-     center = (*A)->center;
+     center = A->center;
 		
      // Distribute the field points    
      if (Nf != 0) {
@@ -1699,21 +1442,21 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 	 }
 				
 	 // Add the field point to the list for child cell j
-	 m = (*A)->leaves[j]->Nf;
+	 m = A->leaves[j]->Nf;
 	 fieldcell[j][m] = k;
-	 (*A)->leaves[j]->Nf++;
+	 A->leaves[j]->Nf++;
        }
 			
        // Recursively distribute the points
        for (j=0;j<8;j++) {
 	 F = fieldcell[j];
-	 DistributeFieldPoints(&((*A)->leaves[j]),field,F,levels-1);
+	 DistributeFieldPoints(A->leaves[j],field,F,levels-1);
        }
      }
    } else if (levels == 0) {
-     Nf = (*A)->Nf;
-     (*A)->fieldlist = (int *)malloc(Nf*sizeof(int));
-     F = (*A)->fieldlist;
+     Nf = A->Nf;
+     A->fieldlist = (int *)malloc(Nf*sizeof(int));
+     F = A->fieldlist;
      for (i=0;i<Nf;i++) 
        F[i] = fieldlist[i];
    }   
@@ -1727,10 +1470,10 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
   * Distributes all of the sources to the appropriate cell at the 
   * bottom of the octree.
   */
- void DistributeSources(nodeT **A, vec3 *source, int *sourcelist, 
+ void DistributeSources(nodeT *A, vec3 *source, int *sourcelist, 
 			int levels) {
    int i, j, k, m, z;
-   int Ns = (*A)->Ns;
+   int Ns = A->Ns;
    vec3 point, center;
    int *sourcecell[8], *S;
    for (z = 0; z < 8; z++)
@@ -1738,7 +1481,7 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 	
    if (levels > 0) {
      // Obtain the center of the cell
-     center = (*A)->center;
+     center = A->center;
 		
      // Distribute the field points
      if (Ns != 0) {      
@@ -1777,21 +1520,21 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 	 //printf("j: %d\n", j);
 	    
 	 // Add the field point to the list for child cell j
-	 m = (*A)->leaves[j]->Ns;
+	 m = A->leaves[j]->Ns;
 	 sourcecell[j][m] = k;
-	 (*A)->leaves[j]->Ns++;
+	 A->leaves[j]->Ns++;
        }
 			
        // Recursively distribute the points
        for (j=0;j<8;j++) {
 	 S = sourcecell[j];
-	 DistributeSources(&((*A)->leaves[j]),source,S,levels-1);
+	 DistributeSources(A->leaves[j],source,S,levels-1);
        }
      }
    } else if (levels == 0) {
-     Ns = (*A)->Ns;
-     (*A)->sourcelist = (int *)malloc(Ns*sizeof(int));
-     S = (*A)->sourcelist;
+     Ns = A->Ns;
+     A->sourcelist = (int *)malloc(Ns*sizeof(int));
+     S = A->sourcelist;
      for (i=0;i<Ns;i++) 
        S[i] = sourcelist[i];
    }
@@ -1799,27 +1542,28 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
      free(sourcecell[z]);
  }
 
+
  /*
   * Function: InteractionList
   * -------------------------------------------------------------------
   * For each node at each level of the octree, the interaction list
   * is determined.
   */
- void InteractionList(nodeT **A, int levels) {
+ void InteractionList(nodeT *A, int levels) {
    int i, j, k, ineigh, iinter, nneigh;
    nodeT *B, *C;
    vec3 center1, center2, cshift, diff;
    double L;
 	
-   assert((*A)->Nf > 0);
+   assert(A->Nf > 0);
 	
    if (levels > 0) {
-     nneigh = (*A)->ineigh;
+     nneigh = A->ineigh;
 		
      /* Sets the cutoff between near and far to be L
       * (this is equivalent to a one cell buffer of the child)
       */
-     L = (*A)->length / 2.0;
+     L = A->length / 2.0;
 		
      /* 
       * Finds all neighbors that are too close for the far field 
@@ -1829,8 +1573,8 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
       */
      // loop over all the neighbors of A
      for (i=0;i<nneigh;i++) {
-       B = (*A)->neighbors[i]; 
-       cshift = (*A)->cshiftneigh[i];
+       B = A->neighbors[i]; 
+       cshift = A->cshiftneigh[i];
 
        // loop over all the children of B
        for (j=0;j<8;j++) {
@@ -1843,17 +1587,17 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 
 	   // loop over all the children of A
 	   for (k=0;k<8;k++) {
-	     C = (*A)->leaves[k];
+	     C = A->leaves[k];
 						
 	     if (C->Nf != 0) {
 							
-	       ineigh = C->ineigh;
-	       iinter = C->iinter;
+	       ineigh  = C->ineigh;
+	       iinter  = C->iinter;
 	       center2 = C->center;
 							
-	       diff.x = center1.x - center2.x;
-	       diff.y = center1.y - center2.y;
-	       diff.z = center1.z - center2.z;
+	       diff.x  = center1.x - center2.x;
+	       diff.y  = center1.y - center2.y;
+	       diff.z  = center1.z - center2.z;
 							
 	       if ( Is_well_separated(diff, L) ) {
 		 C->interaction[iinter] = B->leaves[j];
@@ -1873,10 +1617,10 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
      }
 		
      // recursively build the interaction lists
-     if ((*A)->leaves[0] != NULL) {
+     if (A->leaves[0] != NULL) {
        for (k=0;k<8;k++) {
-	 if ((*A)->leaves[k]->Nf != 0) {
-	   InteractionList(&((*A)->leaves[k]),levels-1);
+	 if (A->leaves[k]->Nf != 0) {
+	   InteractionList(A->leaves[k],levels-1);
 	 }
        }
      }
@@ -1885,7 +1629,7 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
  
  
  /*
-  * Function: M2M
+  * Function: Upward Pass
   * Input:
   *
   *   	   A: Pointer to the pointer of a box in the hierarchy tree so *A is 
@@ -1961,18 +1705,19 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
 #ifdef LINEINT
 void UpwardPass(nodeT **A, segT *segment, vec3 *midpoint, double
 		*Cweights, double *Tkz, double *burg, int n,
-		int dof, int numgau, double *gpoint, double *gweight,
+		int dof, double *gpoint, double *gweight,
 		double alpha, int grid_type) {
-  //double boxLen, double homogen, kfun_t kfun) {
+
 
 #elif TENSOR
 void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
-		double *Tkz, dof2 cutoff,
+		double *Tkz, int2 cutoff,
 		int n, int dof, int grid_type) {
 
   int Ns = (*A)->Ns;                  // Number of source points
   
 #endif
+
   int i, l;
   int dofn3 = dof * n*n*n;
 
@@ -1993,7 +1738,7 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
 #ifdef LINEINT        
 	// Recursively gather sources
 	UpwardPass(&((*A)->leaves[i]),segment,midpoint,Cweights,Tkz,burg,
-		   n,dof,numgau,gpoint,gweight, alpha, grid_type); //, boxLen, homogen, kfun);
+		   n,dof,gpoint,gweight, alpha, grid_type);
 	                
 #elif TENSOR
 	UpwardPass(&((*A)->leaves[i]), source, q, Cweights, Tkz,
@@ -2005,9 +1750,8 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
 	Schild = (*A)->leaves[i]->sourceval;
 			
 	// Manually set the vector from child to parent
-	int  idx[3];
+	int  idx[3] = {i/4%2, i/2%2, i%2};
 	double r[3];
-	idx[2] = i%2, idx[1] = i/2%2, idx[0] = i/4%2;
 	for (l=0; l<3; l++)
 	  if (idx[l] == 0)
 	    r[l] = -1;
@@ -2036,7 +1780,7 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
        We compute the multipole coefficients from
        particles = P2M. */
 		    
-    Particle2Moment(A, segment, burg, midpoint, n, Tkz, dof, numgau, gpoint, gweight, alpha, grid_type);
+    Particle2Moment(A, segment, burg, midpoint, n, Tkz, dof, gpoint, gweight, alpha, grid_type);
 
 
     //print_array((*A)->sourceval, dofn3, "Source weights");
@@ -2087,7 +1831,6 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
 	}
       }
     }
-
 
 
 #endif
@@ -2159,10 +1902,9 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
    int l, l1, l2, l3, l4;
    int count1, count2, count3, wstart;
 	
-   int incr = 1;
-   int n2 = n*n;                       // n2 = n^2
-   int n3 = n*n*n;                     // n3 = n^3
-	
+   int incr  = 1;
+   int n2    = n*n;                       // n2 = n^2
+   int n3    = n*n*n;                     // n3 = n^3	
    int dofn  = dof * n;
    int dofn2 = dof * n2;
    int dofn3 = dof * n3;
@@ -2171,12 +1913,12 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
     
 
    // Recover the index of the child box
-   int idx[3] = {0};
-   if (  r[0] > 0)
+   int idx[3] = {0, 0, 0};
+   if (  r[0] > 0 )
      idx[0] = 1;
-   if (  r[1] > 0)
+   if (  r[1] > 0 )
      idx[1] = 1;
-   if (  r[2] > 0)
+   if (  r[2] > 0 )
      idx[2] = 1; 
 
    // Gather the children source along the z-component
@@ -2296,16 +2038,16 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
   */
 
  void Particle2Moment(nodeT **A, segT *segment, double *burg, vec3 *midpoint,
-		      int n, double *Tkz, int dof, int numgau, 
+		      int n, double *Tkz, int dof,
 		      double *gpoint, double *gweight, double alpha, int grid_type) {
     
-   int Ns          = (*A)->Ns;               // Number of source points
-   int dofn3       = dof * n*n*n;
+   int  Ns         = (*A)->Ns;             // Number of source points
+   int  dofn3      = dof * n*n*n;
    int *sourcelist = (*A)->sourcelist; 	  // Indices of sources in cell
-   vec3 scenter    = (*A)->center;       	  // Center of source cell
+   vec3 scenter    = (*A)->center;    	  // Center of source cell
     
    double *S;
-   int numSource = Ns * numgau;
+   int numSource = Ns * NUMGAUSS;
    vec3 *Ss = (vec3 *)malloc(n * numSource * sizeof(vec3));	
 	
     
@@ -2315,7 +2057,7 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
    // Compute source points from every segment in the unit box
    double *xi = (double *) malloc(3 * Ns * sizeof(double)); 
    vec3 *sourcet = (vec3 *)malloc(numSource * sizeof(vec3));
-   LineIntegral(segment, midpoint, Ns, sourcelist, numgau, gpoint, L,
+   LineIntegral(segment, midpoint, Ns, sourcelist, gpoint, L,
 		scenter, sourcet, xi);
     
    // Compute Ss, the mapping function for the sources
@@ -2343,13 +2085,13 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
 	      
 	 for (j=0;j<Ns;j++) {
 	   sum = 0;
-	   for (l5=0;l5<numgau;l5++) {
+	   for (l5=0;l5<NUMGAUSS;l5++) {
 	     /* Row major storage of data in q
 	      * row = sourcelist[j]
 	      * column = l4
 	      */
 	     // page 8716 Eq. 1
-	     indx = j*numgau + l5;
+	     indx = j*NUMGAUSS + l5;
 	     sum += gweight[l5] * Ss[l1*numSource+indx].x *
 	       Ss[l2*numSource+indx].y * Ss[l3*numSource+indx].z;
 			    
@@ -2358,9 +2100,9 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
 	   k = sourcelist[j];
 		
 	   /* Row major storage in S as well.
-	      S[0], ..., S[dof-1] corresponds to multipole
-	      coefficient 0 for all dofs.
-	   */
+	    * S[0], ..., S[dof-1] corresponds to multipole
+	    * coefficient 0 for all dofs.
+	    */
 	   for (idof=0; idof<dof; idof++)
 	     S[lhs_idx+idof] += sum * burg[k*3 + idof%3] * xi[j*3 + idof/3];
 
@@ -2383,7 +2125,7 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
   * return: L and phi
   */
  void AddPBC( int lpbc, double *M, double **L, double *phi, int Nf,
-	      int n, dof2 dof, double boxLen, double alpha, double *Tkz,
+	      int n, int2 dof, double boxLen, double alpha, double *Tkz,
 	      kernel_t kernel, int grid_type ) {
 
    int n3  = n*n*n;
@@ -2392,8 +2134,9 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
       
    if (lpbc > 1) { // Add PBC stress
 
+     printf("Start PBC ...\n");
+     
      int n3s = n3*dof.s;
-
      double *Unif, *Cheb; // values on the uniform and Chebyshev grids
      if (grid_type == UNIFORM) {
        Unif = M;
@@ -2483,8 +2226,8 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
   * field and source Chebyshev nodes is computed using a SVD lookup table.
   */
  void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U, 
-		     double *VT, double *Kweights, int n, dof2 dof,
-		     dof2 cutoff, double homogen, int curTreeLevel, int
+		     double *VT, double *Kweights, int n, int2 dof,
+		     int2 cutoff, double homogen, int curTreeLevel, int
 		     grid_type) {
   
    int lvl_shift;
@@ -2672,7 +2415,7 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
   *   FFCoeff:
   */
  void Moment2Local(int n, double *R, double *cell_mpCoeff, double *FFCoeff, 
-		   double *E, int *Ktable, dof2 dof, dof2 cutoff, double *VT, 
+		   double *E, int *Ktable, int2 dof, int2 cutoff, double *VT, 
 		   double *Kweights, int grid_type) {
 
    /* TODO: The current code computes 'CompCoeff' each times for the
@@ -2773,7 +2516,7 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
  */
 
  /*
-  * Function: L2L
+  * Function: Downward Pass
   *  Input:
   *	
   *   	   A: Pointer to the pointer of a box in the hierarchy tree so *A is 
@@ -2841,7 +2584,7 @@ void DownwardPass(nodeT **A, vec3 *field, double *Cweights,
 #elif TENSOR
 void DownwardPass(nodeT **A, vec3 *field, vec3 *source, 
 		  double *Cweights, double *Tkz, double *q,
-		  dof2 cutoff, int n, dof2 dof,
+		  int2 cutoff, int n, int2 dof,
 		  double alpha, kfun_t kfun, double
 		  *phi, int grid_type) {
                                   
@@ -3105,7 +2848,7 @@ void DownwardPass(nodeT **A, vec3 *field, vec3 *source,
        count2 = wstart + l3;
        for (l4=0;l4<dof;l4++) {
 	 count3 = dof*count1 + l4;
-	 Fchild[l] += ddot_(&n,&Fy[count3],&(dof), &Cweights[count2],&n); //prefac3*ddot_(&n,&Fy[count3],&(dof), &Cweights[count2],&n);
+	 Fchild[l] += ddot_(&n,&Fy[count3],&(dof), &Cweights[count2],&n);
 	 l++;
        }
      }
@@ -3392,7 +3135,7 @@ void DownwardPass(nodeT **A, vec3 *field, vec3 *source,
 
 	 
  /* Get a pair of source and field points with a distance of r units, where r is in [0, 2n-2].
-  * Used in ComputeKernelUniformGrid().
+  * Used in ComputeKernelUnif().
   */
  void GetPosition(int n, int r, double *fieldpos, double *sourcepos, double *nodepos) {
 
