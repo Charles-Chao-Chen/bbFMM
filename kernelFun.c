@@ -10,29 +10,9 @@
 
 /* ---- Polynomail kernel  ---- */
 
-void PolyFun (vec3* fieldpos, vec3* sourcepos, double *K) {
+void Poly0Fun (vec3* fieldpos, vec3* sourcepos, double *K) {
   
-  vec3 diff;
-  double r;
-	
-  // Compute 1/r
-  diff.x = sourcepos->x - fieldpos->x;
-  diff.y = sourcepos->y - fieldpos->y;
-  diff.z = sourcepos->z - fieldpos->z;
-  r      = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-	
-  int idof, dof2 = 54;
-  double axis;
-  for (idof=0; idof < dof2; idof++) {
-    if (idof%3 == 0)
-      axis = diff.x;
-    else if (idof%3 == 1)
-      axis = diff.y;
-    else
-      axis = diff.z;
-    
-    K[idof] = axis * r;
-  }
+  *K = 1.0;
 }
 
 

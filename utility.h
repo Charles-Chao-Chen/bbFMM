@@ -1,16 +1,26 @@
-#ifndef _vec3_h
-#define _vec3_h
+#ifndef _utility_h
+#define _utility_h
   
 #include <stdbool.h>
 
 
-#define READ_CHECK( callReturn, num ) do {				\
-    if (callReturn != num) {						\
-      printf("Read error in file '%s' at line %i.\n"			\
-	     , __FILE__, __LINE__);					\
-      exit(1);								\
-    }									\
-  } while(0)								\
+#define debugging_enabled 1
+
+#define DEBUG(x) do {				\
+    if (debugging_enabled) {			\
+      printf("[ %s: %i ] %s\n",			\
+	     __FILE__, __LINE__, x);		\
+    }						\
+  } while (0)					\
+    
+
+#define READ_CHECK( callReturn, num ) do {		\
+    if (callReturn != num) {				\
+      printf("Read error in file '%s' at line %i.\n"	\
+	     , __FILE__, __LINE__);			\
+      exit(1);						\
+    }							\
+  } while(0)						\
 
   
 /* Function: Timer

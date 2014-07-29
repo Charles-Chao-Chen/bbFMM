@@ -55,15 +55,15 @@ int main(int argc, char *argv[]) {
     }
     printf("***************************************\n"
 	   "Starting black-box fast multipole method ... \n"
-	   "Number of particles: %d,\n"
-	   "Polynomial order: %d,\n"
-	   "FMM tree level: %d,\n"
-	   "FMM PBC level: %d,\n"
-	   "Grid: %s,\n"
-	   "Box size: %.2f,\n"
-	   "Adjust box size by: %.2f,\n",
-	   N, n, level_tree, level_pbc, grid ? "Chebyshev grids": "uniform grids", box_len, alpha);
-    printf("Direct calculation: %s.\n", dirCalculate ? "yes" : "no");
+	   "Number of particles:   %d,\n"
+	   "Polynomial order:      %d,\n"
+	   "FMM tree level:        %d,\n"
+	   "FMM PBC level:         %d,\n"
+	   "Grid:                  %s,\n"
+	   "Box size:              %.2f,\n"
+	   "Adjust box size by:    %.2f,\n",
+	   N, n, level_tree, level_pbc, grid ? "Chebyshev": "uniform", box_len, alpha);
+    printf("Direct calculation:    %s.\n", dirCalculate ? "yes" : "no");
     printf("***************************************\n\n");
   }
   
@@ -76,9 +76,9 @@ int main(int argc, char *argv[]) {
   // randomly set source and field points
   int Ns = N;
   int Nf = N;
-  vec3 *source = malloc( Ns * sizeof(vec3) );
-  vec3 *field  = malloc( Nf * sizeof(vec3) );
-  double *q    = malloc( Ns * sizeof(double) );
+  vec3 *source = malloc( Ns       * sizeof(vec3) );
+  vec3 *field  = malloc( Nf       * sizeof(vec3) );
+  double *q    = malloc( Ns*dof.s * sizeof(double) );
 
   SetSources( field, Nf, source, Ns, q, dof.s, box_len );
 
@@ -94,7 +94,8 @@ int main(int argc, char *argv[]) {
 
   
   double epsilon = 1e-9;
-  double *phiFmm = bbfmm( field, Nf, source, Ns, q, dof, box_len, alpha,
+  FMMSrc fmm_src = {PNT, source, NULL, q, NULL, Ns, 0};
+  double *phiFmm = bbfmm( fmm_src, field, Nf, dof, box_len, alpha,
 			  n, grid, kernel, level_tree, level_pbc,
 			  epsilon );
   //print_array(phiFmm, Ns*dof.s, "FMM result");

@@ -1,9 +1,10 @@
 #ifndef _BBFMM_H
 #define _BBFMM_H
 
+#include <assert.h>   // for 'assert()'
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdbool.h>  // false
+#include <stdbool.h>  // for 'false'
 #include <math.h>
 #include <string.h>
 #include <fftw3.h>
@@ -12,131 +13,129 @@
 #include "kernelFun.h"
 #include "utility.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-  
 
   
-  typedef enum {
-    UNIFORM,
-    CHEBYSHEV,
-  } gridT;
+typedef enum {
+  UNIFORM,
+  CHEBYSHEV,
+} gridT;
   
 
-  typedef enum {
-    PNT,
-    SEG,
-  } srcT;
+typedef enum {
+  PNT,
+  SEG,
+} srcT;
 
 
   
-  typedef struct {
-    srcT  src_t;  // source type: points or segments
-    segT *seg;    // segment source
-    vec3 *source; // point source
+typedef struct {
+  srcT  src_t;  // source type: points or segments
+  vec3 *source; // point source
+  segT *seg;    // segment source
 
-    double *q;    // source intensity
-    double *burg; // burger's vector    (for segment)
+  double *q;    // source intensity
+  double *burg; // burger's vector    (for segment)
 
-    int Ns;       // source size
-    int nGauss;   // Gauss quadrature # (for segment)
-  } fmm_src;
+  int Ns;       // source size
+  int nGauss;   // Gauss quadrature # (for segment)
+} FMMSrc;
   
   
-  typedef struct {
-    srcT src_t;
-    segT *seg;    // segment source
-    vec3 *source; // point source
-    vec3 *field;  // target points
-    double *q;    // source intensity
-    double *burg; // burger's vector for segment
-    int n;        // interpolation order
-    int Ns;       // source size
-    int Nf;       // target size
-    int fmm_lvl;  // fmm tree level
-    int pbc_lvl;  // fmm pbc level
+typedef struct {
+  srcT src_t;
+  segT *seg;    // segment source
+  vec3 *source; // point source
+  vec3 *field;  // target points
+  double *q;    // source intensity
+  double *burg; // burger's vector for segment
+  int n;        // interpolation order
+  int Ns;       // source size
+  int Nf;       // target size
+  int fmm_lvl;  // fmm tree level
+  int pbc_lvl;  // fmm pbc level
     
-    double boxL;  // box length
-    double boxA;  // box adjustment parameter for segment source
-    double epsilon; // SVD accuracy
+  double boxL;  // box length
+  double boxA;  // box adjustment parameter for segment source
+  double epsilon; // SVD accuracy
 
-    gridT grid_t; // interpolation grid type
-  } fmm_input;
-
-
-  /* Struct: nodeT
-   * -------------------------------------------------------------------
-   * This struct is a node in the octree.
-   */
-  typedef struct _nodeT {
-    struct _nodeT *leaves[8];
-    struct _nodeT *parent;
-    struct _nodeT *neighbors[27];
-    struct _nodeT *interaction[189];
-    vec3 center, cshiftneigh[27], cshiftinter[189];
-    double length;
-    double *fieldval, *sourceval, *sourcefre, *proxysval; 
-    int *fieldlist, *sourcelist;
-    int Nf, Ns, ineigh, iinter;
-  } nodeT;
+  gridT grid_t; // interpolation grid type
+} fmm_input;
 
 
-  /*
-    typedef struct _dof_struct {
-    int s; // Size of source vector
-    int f; // Size of field vector
-    } doft; // Type of variable dof
-  */
+/* Struct: nodeT
+ * -------------------------------------------------------------------
+ * This struct is a node in the octree.
+ */
+typedef struct _nodeT {
+  struct _nodeT *leaves[8];
+  struct _nodeT *parent;
+  struct _nodeT *neighbors[27];
+  struct _nodeT *interaction[189];
+  vec3 center, cshiftneigh[27], cshiftinter[189];
+  double length;
+  double *fieldval, *sourceval, *sourcefre, *proxysval; 
+  int *fieldlist, *sourcelist;
+  int Nf, Ns, ineigh, iinter;
+} nodeT;
 
-  /* Struct: fmmparam
-   * -------------------------------------------------------------------
-   * This struct stores all of the FMM parameters.
-   */
+
+/*
+  typedef struct _dof_struct {
+  int s; // Size of source vector
+  int f; // Size of field vector
+  } doft; // Type of variable dof
+*/
+
+/* Struct: fmmparam
+ * -------------------------------------------------------------------
+ * This struct stores all of the FMM parameters.
+ */
   
-  typedef struct _fmmparam {
-    int Ns;       // Number of sources
-    int Nf;       // Number of field points
-    int2 dof;        // Number of degrees of freedom
-    double L;        // Length of one side of simulation cube
-    int n;        // Number of Chebyshev nodes in one direction
-    int levels;        // Maximum number of levels in octree
-    int PBClevels;        // Number of PBC levels (images = 27^PBClevels)
-    int PBCshells;        // Number of PBC shells (for direct calculation)
-    int precomp;        // Turn on (1) or off (0) pre-computation
-    int2 cutoff;       // Number of singular values to keep
-    double homogen;        // Order of homogeneity of kernel
-    char filesval[80];     // File name for storing singular values
-    char filesvec[80];     // File name for storing singular vectors
-  } fmmparam;
+typedef struct _fmmparam {
+  int Ns;       // Number of sources
+  int Nf;       // Number of field points
+  int2 dof;        // Number of degrees of freedom
+  double L;        // Length of one side of simulation cube
+  int n;        // Number of Chebyshev nodes in one direction
+  int levels;        // Maximum number of levels in octree
+  int PBClevels;        // Number of PBC levels (images = 27^PBClevels)
+  int PBCshells;        // Number of PBC shells (for direct calculation)
+  int precomp;        // Turn on (1) or off (0) pre-computation
+  int2 cutoff;       // Number of singular values to keep
+  double homogen;        // Order of homogeneity of kernel
+  char filesval[80];     // File name for storing singular values
+  char filesvec[80];     // File name for storing singular vectors
+} fmmparam;
 
 
 
-  /*
-   * Function: bbfmm
-   * -----------------------------------------------------------------
-   * Given the source and field point locations, strength of the sources,
-   * number of field points and sources, length of the computation cell, and 
-   * the number of Chebyshev nodes, the field is computed.
-   */
+/*
+ * Function: bbfmm
+ * -----------------------------------------------------------------
+ * Given the source and field point locations, strength of the sources,
+ * number of field points and sources, length of the computation cell, and 
+ * the number of Chebyshev nodes, the field is computed.
+ */
 
-#ifdef LINEINT
-  void bbfmm(vec3 *field, segT *segment, double *burg, int Nf,
-	     int Ns, int2 dof, double boxLen, double alpha, int
-	     level, int n, kernel_t kernel, double epsilon,
-	     double *phi, int grid_type, int lpbc);
+/*
+  #ifdef LINEINT
+  void bbfmm(FMMSrc fmm_src, vec3 *field, segT *segment, double *burg, int Nf,
+  int Ns, int2 dof, double boxLen, double alpha, int
+  level, int n, kernel_t kernel, double epsilon,
+  double *phi, int grid_type, int lpbc);
 
-#elif TENSOR
-double* bbfmm( vec3 *field, int Nf, vec3 *source, int Ns, double *q,
+  #elif TENSOR
+*/
+double* bbfmm( FMMSrc fmm_src, vec3 *field, int Nf,
 	       int2 dof,
 	       double box_len, double alpha, int n, gridT grid,
 	       kernel_t kernel, int level_tree, int level_pbc,
 	       double epsilon );
 
-#endif
 
 
-  nodeT* BuildTree(double boxLen, int treeLevel, int n);
+
+nodeT* BuildTree(double boxLen, int treeLevel, int n);
      
 
 /*
@@ -147,286 +146,292 @@ double* bbfmm( vec3 *field, int Nf, vec3 *source, int Ns, double *q,
 void GetM2L(double *Kweights, double boxLen, double alpha,
 	    int2 *cutoff, int n,
 	    kernel_t kernel, double epsilon, int2
-	    dof, int Ns, int treeLevel,
+	    dof, int treeLevel,
 	    double **K, double **U, double **VT, int grid_type);
   
 
 bool PrecomputeAvailable( char *Kmat, char *Umat, char *Vmat,
-			      double homogen, double boxLen,
-			      int treeLevel, int grid_type );
+			  double homogen, double boxLen,
+			  int treeLevel, int grid_type );
 
 
-  void StartPrecompute(double boxLen, int treeLevel, int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double alpha, double *Kweights, double epsilon, int grid_type);
+void StartPrecompute(double boxLen, int treeLevel, int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double alpha, double *Kweights, double epsilon, int grid_type);
 
      
-  void compute_m2l_operator (int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double l, double alpha, double *Kweights, double epsilon, int grid_type);
+void compute_m2l_operator (int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double l, double alpha, double *Kweights, double epsilon, int grid_type);
      
-  /*
-   * Function: FMMReadMatrices
-   * ------------------------------------------------------------------
-   * Read in the kernel interaction matrix M and the matrix of singular
-   * vectors U.
-   */
-  void FMMReadMatrices(double **K, double **U, double **VT, int2 *cutoff,
-		       int n, int2 dof, char *Kmat, char *Umat,
-		       char *Vmat, int treeLevel, double homogen,
-		       int grid_type);
+/*
+ * Function: FMMReadMatrices
+ * ------------------------------------------------------------------
+ * Read in the kernel interaction matrix M and the matrix of singular
+ * vectors U.
+ */
+void FMMReadMatrices(double **K, double **U, double **VT, int2 *cutoff,
+		     int n, int2 dof, char *Kmat, char *Umat,
+		     char *Vmat, int treeLevel, double homogen,
+		     int grid_type);
 
 
 
-  /*
-   * Function: FMMDistribute
-   * ------------------------------------------------------------------
-   * Distribute the field points and sources to the appropriate location
-   * in the FMM hiearchy and sets up the interaction list.
-   */
-  void FMMDistribute(nodeT *A, vec3 *field, vec3 *source,
-		     int Nf, int Ns, int level);
+/*
+ * Function: FMMDistribute
+ * ------------------------------------------------------------------
+ * Distribute the field points and sources to the appropriate location
+ * in the FMM hiearchy and sets up the interaction list.
+ */
+void FMMDistribute(nodeT *A, vec3 *field, vec3 *source,
+		   int Nf, int Ns, int level);
 
-  /*
-   * Function: FMMCompute
-   * ------------------------------------------------------------------
-   * Computes the field using BBFMM.
-   */
-
-#ifdef LINEINT
+/*
+ * Function: FMMCompute
+ * ------------------------------------------------------------------
+ * Computes the field using BBFMM.
+ */
+/*
+  #ifdef LINEINT
   void FMMCompute(nodeT **A, vec3 *field, int Nf, segT *segment, 
-		  vec3 * midpoint, double *burg, double *K, double *U, 
-		  double *VT, double *Tkz, int *Ktable, double *Kweights,
-		  double *Cweights, int2 cutoff, int n, 
-		  int2 dof, double alpha, double *phi,
-		  int grid_type, double boxLen, int lpbc,
-		  kernel_t kernel);
+  vec3 * midpoint, double *burg, double *K, double *U, 
+  double *VT, double *Tkz, int *Ktable, double *Kweights,
+  double *Cweights, int2 cutoff, int n, 
+  int2 dof, double alpha, double *phi,
+  int grid_type, double boxLen, int lpbc,
+  kernel_t kernel);
 
-#elif TENSOR
-  void FMMCompute(nodeT **A, vec3 *field, int Nf, vec3 *source, 
-		  double *q, double *K, double *U, 
-		  double *VT, double *Tkz, int *Ktable, double *Kweights,
-		  double *Cweights, int2 cutoff, int n, int2 dof,
-		  double alpha, double *phi, int
-		  grid_type, double boxLen, int lpbc,
-		  kernel_t kernel);
-#endif
+  #elif TENSOR
+*/
 
-  /*
-   * Function: FMMCleanup
-   * ------------------------------------------------------------------
-   * Cleans up after FMM calculation.
-   */
-  void FMMCleanup(nodeT *A);
+void FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
+		double *K, double *U, 
+		double *VT, double *Tkz, int *Ktable, double *Kweights,
+		double *Cweights, int2 cutoff, int n, int2 dof,
+		double alpha, double *phi, int
+		grid_type, double boxLen, int lpbc,
+		kernel_t kernel);
 
-  /*
-   * Function: SetParam
-   * ------------------------------------------------------------------
-   * Read in the user-specified options from the options file.
-   * 
-   */
-  int SetParam(char *options, fmmparam *param);
+/*
+ * Function: FMMCleanup
+ * ------------------------------------------------------------------
+ * Cleans up after FMM calculation.
+ */
+void FMMCleanup(nodeT *A);
 
-
-  /* This function computes the Gaussian points along the segments in 
-   * a leaf box with their quadrature weights
-   */
-  void LineIntegral(segT *segment, vec3 *midpoint, int Ns,
-		    int *sourcelist, double *gpoint, double
-		    L, vec3 scenter, vec3 *sourcet, double *xi);
+/*
+ * Function: SetParam
+ * ------------------------------------------------------------------
+ * Read in the user-specified options from the options file.
+ * 
+ */
+int SetParam(char *options, fmmparam *param);
 
 
-  /*
-   * Function: EvaluateKernelCell
-   * -------------------------------------------------------------------
-   * Evaluates the kernel for interactions between a pair of cells.
-   */
-  void EvaluateKernelCell(vec3 *fieldpos, vec3 *sourcepos, 
-			  int Nf, int Ns, int2 dof, kfun_t kfun, double *kernel);
+/* This function computes the Gaussian points along the segments in 
+ * a leaf box with their quadrature weights
+ */
+void LineIntegral(segT *segment, vec3 *midpoint, int Ns,
+		  int *sourcelist, double *gpoint, double
+		  L, vec3 scenter, vec3 *sourcet, double *xi);
 
-  /*
-   * Function: EvaluateField
-   * -------------------------------------------------------------------
-   * Evaluates the kernel for interactions between a pair of cells.
-   */
-  void EvaluateField(vec3 *fieldpos, vec3 *sourcepos, 
-		     double *q, int Nf, int Ns, int2 dof, 
-		     kfun_t kfun, double *fieldval);
 
-  /*
-   * Function: ComputeWeights
-   * ------------------------------------------------------------------
-   * Computes the weights for the Chebyshev nodes of all children cells
-   * (identical for all cells and all levels so just compute once and
-   * store in memory) and set up the lookup table.
-   */
-  void ComputeWeights(double *Tkz, int *Ktable, double *Kweights, 
-		      double *Cweights, int n, double alpha, int
-		      grid_type);
+/*
+ * Function: EvaluateKernelCell
+ * -------------------------------------------------------------------
+ * Evaluates the kernel for interactions between a pair of cells.
+ */
+void EvaluateKernelCell(vec3 *fieldpos, vec3 *sourcepos, 
+			int Nf, int Ns, int2 dof, kfun_t kfun, double *kernel);
+
+/*
+ * Function: EvaluateField
+ * -------------------------------------------------------------------
+ * Evaluates the kernel for interactions between a pair of cells.
+ */
+void EvaluateField(vec3 *fieldpos, vec3 *sourcepos, 
+		   double *q, int Nf, int Ns, int2 dof, 
+		   kfun_t kfun, double *fieldval);
+
+/*
+ * Function: ComputeWeights
+ * ------------------------------------------------------------------
+ * Computes the weights for the Chebyshev nodes of all children cells
+ * (identical for all cells and all levels so just compute once and
+ * store in memory) and set up the lookup table.
+ */
+void ComputeWeights(double *Tkz, int *Ktable, double *Kweights, 
+		    double *Cweights, int n, double alpha, int
+		    grid_type);
 
   
-  //void ComputeWeightsPBC(double *UpMat, int n, double *Tkz, int grid_type);
+//void ComputeWeightsPBC(double *UpMat, int n, double *Tkz, int grid_type);
 
 
-  /*
-   * Function: ComputeKernelCheb
-   * -------------------------------------------------------------------
-   * Computes the kernel for 316n^6 interactions between Chebyshev nodes
-   * and then computes the SVD of the kernel matrix.
-   */
-  void ComputeKernelCheb(double *Kweights, int n, kernel_t kernel,
-			 double epsilon, int2 dof,
-			 char *Kmat, char *Umat, char *Vmat, double
-			 alpha, double boxLen);
+/*
+ * Function: ComputeKernelCheb
+ * -------------------------------------------------------------------
+ * Computes the kernel for 316n^6 interactions between Chebyshev nodes
+ * and then computes the SVD of the kernel matrix.
+ */
+void ComputeKernelCheb(double *Kweights, int n, kernel_t kernel,
+		       double epsilon, int2 dof,
+		       char *Kmat, char *Umat, char *Vmat, double
+		       alpha, double boxLen);
 
 
-  /*
-   * Function: ComputeKernelUnif
-   * ------------------------------------------------------------------
-   * Computes the kernel for 316(2n-1)^3 interactions between Uniform
-   * Grid nodes. Does not compute SVD.
-   */
-  void ComputeKernelUnif(int n,int2 dof, kfun_t kfun, char
-			 *Kmat, double alpha, double len);
+/*
+ * Function: ComputeKernelUnif
+ * ------------------------------------------------------------------
+ * Computes the kernel for 316(2n-1)^3 interactions between Uniform
+ * Grid nodes. Does not compute SVD.
+ */
+void ComputeKernelUnif(int n,int2 dof, kfun_t kfun, char
+		       *Kmat, double alpha, double len);
  
 
-  /*
-   * Function: NewNode
-   * ------------------------------------------------------------------
-   * Dynamically allocates space for a new node A in the octree and
-   * initializes the quantities in the node.
-   *
-   */
-  nodeT* NewNode( vec3 center, double L, int n );
+/*
+ * Function: NewNode
+ * ------------------------------------------------------------------
+ * Dynamically allocates space for a new node A in the octree and
+ * initializes the quantities in the node.
+ *
+ */
+nodeT* NewNode( vec3 center, double L, int n );
 
-  /*
-   * Function: BuildFMMHierarchy
-   * ------------------------------------------------------------------
-   * Builds the FMM hierarchy with l levels.
-   *
-   */
-  void BuildFMMHierarchy(nodeT *A, int l, int n);
+/*
+ * Function: BuildFMMHierarchy
+ * ------------------------------------------------------------------
+ * Builds the FMM hierarchy with l levels.
+ *
+ */
+void BuildFMMHierarchy(nodeT *A, int l, int n);
 
-  /*
-   * Function: DistributeFieldPoints
-   * -------------------------------------------------------------------
-   * Distributes all of the field points to the appropriate cell at the 
-   * bottom of the octree.
-   */
-  void DistributeFieldPoints(nodeT *A, vec3 *field, int *fieldlist, int levels);
+/*
+ * Function: DistributeFieldPoints
+ * -------------------------------------------------------------------
+ * Distributes all of the field points to the appropriate cell at the 
+ * bottom of the octree.
+ */
+void DistributeFieldPoints(nodeT *A, vec3 *field, int *fieldlist, int levels);
 
-  /*
-   * Function: DistributeSources
-   * -------------------------------------------------------------------
-   * Distributes all of the sources to the appropriate cell at the 
-   * bottom of the octree.
-   */
-  void DistributeSources(nodeT *A, vec3 *segment, 
-			 int *sourcelist, int levels);
+/*
+ * Function: DistributeSources
+ * -------------------------------------------------------------------
+ * Distributes all of the sources to the appropriate cell at the 
+ * bottom of the octree.
+ */
+void DistributeSources(nodeT *A, vec3 *segment, 
+		       int *sourcelist, int levels);
 
-  /*
-   * Function: InteractionList
-   * -----------------------------------------------------------------
-   * For each node at each level of the octree, the interaction list
-   * is determined.
-   */
-  void InteractionList(nodeT *A, int levels);
+/*
+ * Function: InteractionList
+ * -----------------------------------------------------------------
+ * For each node at each level of the octree, the interaction list
+ * is determined.
+ */
+void InteractionList(nodeT *A, int levels);
 
 
-  double AdjustBoxSize(double Len, double alpha);
+double AdjustBoxSize(double Len, double alpha);
 
-  /*
-   * Function: UpwardPass
-   * -------------------------------------------------------------------
-   * Gathers the sources from the children cells and determines the strength
-   * of pseudo-charges located at the Chebyshev nodes of the parent cell.
-   * (upward pass of BBFMM)
-   */
+/*
+ * Function: UpwardPass
+ * -------------------------------------------------------------------
+ * Gathers the sources from the children cells and determines the strength
+ * of pseudo-charges located at the Chebyshev nodes of the parent cell.
+ * (upward pass of BBFMM)
+ */
 
-#ifdef LINEINT
+/*
+  #ifdef LINEINT
   void UpwardPass(nodeT **A, segT *segment, vec3 *midpoint,
-		  double *Tkz, double *burg, double *Kweights, 
-		  int n, int dof, double *gpoint,
-		  double *gweight, double alpha, int grid_type);
-		  //, double boxLen, double homogen, int lpbc, kfun_t kfun);
+  double *Tkz, double *burg, double *Kweights, 
+  int n, int dof, double *gpoint,
+  double *gweight, double alpha, int grid_type);
+  //, double boxLen, double homogen, int lpbc, kfun_t kfun);
 
-#elif TENSOR
-  void UpwardPass(nodeT **A, vec3 *source, double *q,
-		  double *Cweights, double *Tkz,
-		  int2 cutoff, int n, int dof, int grid_type);
-#endif
-
-  void Moment2Moment(int n, double *r, double *Schild, double *SS, 
-		     int dof, double *Cweights);
-
-  void Particle2Moment(nodeT **A, segT *segment, double *burg, 
-		       vec3 *midpoint, int n, double *Tkz, int dof, 
-		       double *gpoint, double *gweight,
-		       double alpha, int grid_type);
-
-  /*
-   * Function: FMMInteraction
-   * ---------------------------------------------------------------------
-   * At each level of the octree the interaction between well-separated cells of 
-   * field and source Chebyshev nodes is computed using a SVD lookup table.
-   */
-  void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U, 
-		      double *VT, double *Kweights, int n, int2 dof,
-		      int2 cutoff, double homogen, int treeLevel, int
-		      grid_type);
+  #elif TENSOR
+*/
+  
+void UpwardPass(nodeT **A, vec3 *source, double *q,
+		double *Cweights, double *Tkz,
+		int2 cutoff, int n, int dof, int grid_type);
 
 
-  void Moment2Local(int n, double *R, double *cell_mpCoeff, 
-		    double *FFCoeff, double *E, int *Ktable, int2
-		    dof, int2 cutoff, double *VT, double *Kweights,
-		    int grid_type);
+void Moment2Moment(int n, double *r, double *Schild, double *SS, 
+		   int dof, double *Cweights);
+
+void Particle2Moment(nodeT **A, segT *segment, double *burg, 
+		     vec3 *midpoint, int n, double *Tkz, int dof, 
+		     double *gpoint, double *gweight,
+		     double alpha, int grid_type);
+
+/*
+ * Function: FMMInteraction
+ * ---------------------------------------------------------------------
+ * At each level of the octree the interaction between well-separated cells of 
+ * field and source Chebyshev nodes is computed using a SVD lookup table.
+ */
+void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U, 
+		    double *VT, double *Kweights, int n, int2 dof,
+		    int2 cutoff, double homogen, int treeLevel, int
+		    grid_type);
 
 
-  /*
-   * Function: FMMInteractionPBC
-   * ---------------------------------------------------------------------
-   * Add the interactions due to the periodic images.
-   */
-  //void FMMInteractionPBC(nodeT **A, double *KPBC, int n, int2 dof);
+void Moment2Local(int n, double *R, double *cell_mpCoeff, 
+		  double *FFCoeff, double *E, int *Ktable, int2
+		  dof, int2 cutoff, double *VT, double *Kweights,
+		  int grid_type);
 
-  /*
-   * Function: DownwardPass
-   * -------------------------------------------------------------------
-   * Distributes the field from the parent cell to the children cells 
-   * using Chebyshev interpolation. (downward pass of BBFMM)
-   */
 
-#ifdef LINEINT
+/*
+ * Function: FMMInteractionPBC
+ * ---------------------------------------------------------------------
+ * Add the interactions due to the periodic images.
+ */
+//void FMMInteractionPBC(nodeT **A, double *KPBC, int n, int2 dof);
+
+/*
+ * Function: DownwardPass
+ * -------------------------------------------------------------------
+ * Distributes the field from the parent cell to the children cells 
+ * using Chebyshev interpolation. (downward pass of BBFMM)
+ */
+
+/*
+  #ifdef LINEINT
   void DownwardPass(nodeT **A, vec3 *field, double *Cweights, 
-		    double *Tkz, int n, int dof, double alpha,
-		    double *phi, int grid_type);
+  double *Tkz, int n, int dof, double alpha,
+  double *phi, int grid_type);
 
-#elif TENSOR
-  void DownwardPass(nodeT **A, vec3 *field, vec3 *source, 
-		    double *Cweights, double *Tkz, double *q,
-		    int2 cutoff, int n, int2 dof,
-		    double alpha, kfun_t kfun,
-		    double *phi, int grid_type);
-                                                 
-#endif
-
-
-  void Local2Local(int n, double *r, double *F, double *Fchild, 
-		   int dof, double *Cweights, int grid_type);
-
-  void Local2Particle(nodeT **A, vec3 *field, double *Tkz, int n,
-		      int dof, double alpha, double *phi, int
-		      grid_type);
-
-  /*
-   * Function: FreeNode
-   * ------------------------------------------------------------------
-   * Frees up space associated with node A.
-   *
-   */
-  void FreeNode(nodeT *A);
+  #elif TENSOR
+*/
+  
+void DownwardPass(nodeT **A, vec3 *field, vec3 *source, 
+		  double *Cweights, double *Tkz, double *q,
+		  int2 cutoff, int n, int2 dof,
+		  double alpha, kfun_t kfun,
+		  double *phi, int grid_type);
 
 
-  void GetPosition(int n, int idx, double *fieldpos, double *sourcepos,
-		   double *nodepos);
 
-  void FrequencyProduct(int N, double *Afre, double *xfre, double *res);
+void Local2Local(int n, double *r, double *F, double *Fchild, 
+		 int dof, double *Cweights, int grid_type);
+
+void Local2Particle(nodeT **A, vec3 *field, double *Tkz, int n,
+		    int dof, double alpha, double *phi, int
+		    grid_type);
+
+/*
+ * Function: FreeNode
+ * ------------------------------------------------------------------
+ * Frees up space associated with node A.
+ *
+ */
+void FreeNode(nodeT *A);
+
+
+void GetPosition(int n, int idx, double *fieldpos, double *sourcepos,
+		 double *nodepos);
+
+void FrequencyProduct(int N, double *Afre, double *xfre, double *res);
 
 
 
@@ -444,18 +449,13 @@ void ComputeTkz(double *T, int n);
 
 inline bool Is_well_separated(vec3 p, double L);
 
-  /*
-inline void InBoxCheck( double x ) {
+/*
+  inline void InBoxCheck( double x ) {
   if (fabs(x) > 1)
-    printf("Outside Box!\n");
-}
+  printf("Outside Box!\n");
+  }
 */
 
-  double* MeanStressFmm(const double *ChebyshevWeightField, const int n, const int dof, const double *Tkz);
+double* MeanStressFmm(const double *ChebyshevWeightField, const int n, const int dof, const double *Tkz);
 
-  
-#ifdef __cplusplus
-}
-#endif
-  
 #endif

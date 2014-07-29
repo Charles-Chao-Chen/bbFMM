@@ -12,39 +12,44 @@ LD = gcc
 LDPATH  = -L /usr/bin/ld
 LDFLAGS = -lblas -llapack -lfftw3 -lm 
 FLAGS   = -Wall -O3 -g -I $(BLAS_INCLUDE) -I $(FFTW_INCLUDE)
-#KERNEL  = -DDDANISO -DLINEINT
-#KERNEL = -DLAPLACIANFORCE -DTENSOR
-#KERNEL_INT   = -DLAPLACIANFORCE -DLINEINT
-KERNEL  = -DTENSOR #-DLINEINT
 PFLAG   =
 
 
-PROG   = bbfmm
+PROG   = bbfmm test
 HEADER = AnisoFunctions.h bbfmm.h kernelFun.h directCalc.h utility.h
-OBJS   = main.o bbfmm.o directCalc.o utility.o kernelFun.o DerivativeOfGreensFunction.o ChaosFunction.o AnisoFunctions.o
+OBJS   = bbfmm.o directCalc.o utility.o kernelFun.o DerivativeOfGreensFunction.o ChaosFunction.o AnisoFunctions.o
+
+OBJS1  = main.o $(OBJS)
+OBJS2  = test.o $(OBJS)
+
 
 all: $(PROG)
 
-bbfmm: $(OBJS)
-	$(LD) $(OBJS) -o $@ $(LDPATH) $(LDFLAGS) $(PFLAG)
+bbfmm: $(OBJS1)
+	$(LD) $(OBJS1) -o $@ $(LDPATH) $(LDFLAGS) $(PFLAG)
 
+test: $(OBJS2)
+	$(LD) $(OBJS2) -o $@ $(LDPATH) $(LDFLAGS) $(PFLAG)
+
+test.o: test.c $(HEADER)
+	$(CC) $(FLAGS) -c $< -o $@ $(PFLAG)
 
 main.o: main.c $(HEADER)
-	$(CC) $(FLAGS) $(KERNEL) -c $< $(PFLAG)
+	$(CC) $(FLAGS) -c $< -o $@ $(PFLAG)
 
 
 bbfmm.o: bbfmm.c $(HEADER)
-	$(CC) $(FLAGS) $(KERNEL) -c $< -o $@ $(PFLAG)
+	$(CC) $(FLAGS) -c $< -o $@ $(PFLAG)
 
 
 kernelFun.o: kernelFun.c $(HEADER)
-	$(CC) $(FLAGS) $(KERNEL) -c $< -o $@ $(PFLAG)
+	$(CC) $(FLAGS) -c $< -o $@ $(PFLAG)
 
 directCalc.o: directCalc.c $(HEADER)
-	$(CC) $(FLAGS) $(KERNEL) -c $< -o $@ $(PFLAG)
+	$(CC) $(FLAGS) -c $< -o $@ $(PFLAG)
 
 utility.o: utility.c $(HEADER)
-	$(CC) $(FLAGS) $(KERNEL) -c $< -o $@ $(PFLAG)
+	$(CC) $(FLAGS) -c $< -o $@ $(PFLAG)
 
 DerivativeOfGreensFunction.o: DerivativeOfGreensFunction.c
 	$(CC) $(FLAGS) -Wno-unused-variable -c $< $(PFLAG)

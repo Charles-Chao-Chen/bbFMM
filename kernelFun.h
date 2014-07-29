@@ -31,7 +31,7 @@ typedef struct {
 // kernel_t DDANISO    = {"Aniso",     2.0, -1, &Fun};
 
 
-void PolyFun (vec3* fieldpos, vec3* sourcepos, double *K);
+void Poly0Fun (vec3* fieldpos, vec3* sourcepos, double *K);
 
 void GaussianFun (vec3* fieldpos, vec3* sourcepos, double *K);
 
