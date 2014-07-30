@@ -1,3 +1,7 @@
+TODO: consider more symmetry in Chebyshev pre-computation.
+Only the r- symmetry is currently considered, 
+i.e. f(r) ?= f(-r).
+
 Changed 'FMMSetup()' to 'ComputeM2L()'.
 
 Put 'FMMReadMatrices()' into 'FMMSetup()'.

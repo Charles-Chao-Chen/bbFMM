@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
 			  * Note: the original computational domain is lpbc=0
 			  *       and PBC starts from lpbc=2
 			  */
-  gridT grid     = UNIFORM;
+  gridT grid     = UNIF;
   double box_len = 4.;
   double alpha   = 0.;
   int dirCalculate = 1;
@@ -87,7 +87,11 @@ int main(int argc, char *argv[]) {
   //AnisoInit();
   //kernelT kfun = &AnisoFun;
 
-  // {name, homogen, symmetry, kernelFunction}
+  /* kernel_t struct: {name, homogen, symmetry, kernelFunction}
+   * name can be arbitrary string given by user
+   * homogen = log_2 ( f(r) / f(2r) )
+   * kernel function has to be defined first
+   */
   kernel_t kernel = {"lapforce", 2.0, -1, &LapforceFun};
   //kernel_t kernel = {"gaussian",  0.0,  0, &GaussianFun};
   //kernel_t kernel = {"laplace", 1.0, 1, &LaplacianFun};

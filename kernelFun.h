@@ -33,6 +33,10 @@ typedef struct {
 
 void Poly0Fun (vec3* fieldpos, vec3* sourcepos, double *K);
 
+void Poly1Fun (vec3* fieldpos, vec3* sourcepos, double *K);
+
+void Poly3Fun (vec3* fieldpos, vec3* sourcepos, double *K);
+  
 void GaussianFun (vec3* fieldpos, vec3* sourcepos, double *K);
 
 void LaplacianFun (vec3* fieldpos, vec3* sourcepos, double *K);

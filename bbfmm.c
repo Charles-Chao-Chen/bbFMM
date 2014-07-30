@@ -182,7 +182,7 @@ void GetM2L(double *Kweights, double boxLen, double alpha,
   char *grid2 = "Unif";
 
    
-  if (grid_type == CHEBYSHEV) {
+  if (grid_type == CHEB) {
     sprintf(Kmat,"%s%s%sK%da%.1f.bin", dir_name, kernel.name, grid1, n, alpha);
     sprintf(Umat,"%s%s%sU%da%.1f.bin", dir_name, kernel.name, grid1, n, alpha);
     sprintf(Vmat,"%s%s%sV%da%.1f.bin", dir_name, kernel.name, grid1, n, alpha);
@@ -221,7 +221,7 @@ bool PrecomputeAvailable( char *Kmat, char *Umat, char *Vmat,
     if (fV!=NULL) fclose(fV);
     return false;
     
-  } else if (homogen < HOMO_THRESHOLD) { // non-homogeneous kernel
+  } else if ( !IsHomoKernel(homogen) ) { // non-homogeneous kernel
 
     double len_file;
     int    lvl_file;    
@@ -252,7 +252,7 @@ void StartPrecompute(double boxLen, int treeLevel, int n, int2 dof, kernel_t ker
   fwrite(&treeLevel, sizeof(int), 1, fK); // write tree level
   fclose(fK);	     		 
 
-  if (kernel.homogen > HOMO_THRESHOLD) {  // homogeneours kernel
+  if ( IsHomoKernel(kernel.homogen) ) {  // homogeneours kernel
 
     double unit_len = 1.0;
     compute_m2l_operator(n, dof, kernel, Kmat, Umat, Vmat, unit_len, alpha, Kweights, epsilon, grid_type);
@@ -274,10 +274,10 @@ void compute_m2l_operator (int n, int2 dof, kernel_t kernel, char *Kmat, char *U
 
   switch (grid_type) {
       
-  case UNIFORM:
+  case UNIF:
     ComputeKernelUnif(n, dof, kernel.kfun, Kmat, alpha, l);
     break;
-  case CHEBYSHEV:
+  case CHEB:
     ComputeKernelCheb(Kweights, n, kernel, epsilon, dof,
 		      Kmat, Umat, Vmat, alpha, l);
     break;
@@ -297,7 +297,7 @@ void FMMReadMatrices(double **K, double **U, double **VT, int2 *cutoff,
 		     int grid_type) {
 
   int preCompLevel;
-  if (homogen < HOMO_THRESHOLD)
+  if ( !IsHomoKernel(homogen) )
     preCompLevel = treeLevel - 1;
   else
     preCompLevel = 1;
@@ -307,14 +307,14 @@ void FMMReadMatrices(double **K, double **U, double **VT, int2 *cutoff,
   int Usize;
   int Vsize;
   
-  if (grid_type == UNIFORM) {
+  if (grid_type == UNIF) {
        
     cutoff->f = dof.f*n*n*n;
     cutoff->s = dof.s*n*n*n;
 
     Ksize = 316*(2*n-1)*(2*n-1)*(2*n-1)*dof.s*dof.f * preCompLevel;
     
-  } else if (grid_type == CHEBYSHEV) { // read 'U' and 'V'
+  } else if (grid_type == CHEB) { // read 'U' and 'V'
     
     FILE *fU = fopen(Umat,"rb"); 
     FILE *fV = fopen(Vmat,"rb");
@@ -783,7 +783,7 @@ void ComputeWeights(double *Tkz, int *Ktable, double *Kweights,
   double tmp2;
   double nodes[n];
   GridPos1d(0, 1.0, n, grid_type, nodes);
-  if (grid_type == CHEBYSHEV) {
+  if (grid_type == CHEB) {
     for (l1=0;l1<n;l1++) {
       tmp1 = 1./sqrt(1-nodes[l1]*nodes[l1]);
       for (l2=0;l2<n;l2++) {
@@ -797,7 +797,7 @@ void ComputeWeights(double *Tkz, int *Ktable, double *Kweights,
   }
 
   /*
-    else if (grid_type == UNIFORM) { // Uniform weights
+    else if (grid_type == UNIF) { // Uniform weights
 
     for (count=0; count<n3; count++)
     Kweights[count] = 1;
@@ -901,8 +901,8 @@ void ComputeKernelCheb(double *Kweights, int n, kernel_t
       
   // Compute the locations of the field points in a unit cube
   vec3 center = {0, 0, 0};
-  GridPos3d(center, alphaAdjust, boxLen, n, CHEBYSHEV, fieldpos);
-  //GetBoxNodes(fieldpos, n, boxLen, center, CHEBYSHEV);
+  GridPos3d(center, alphaAdjust, boxLen, n, CHEB, fieldpos);
+  //GetBoxNodes(fieldpos, n, boxLen, center, CHEB);
       
   // Compute the kernel values for interactions with all 316 cells
   int countM2L=0;
@@ -922,8 +922,8 @@ void ComputeKernelCheb(double *Kweights, int n, kernel_t
 	  if (countM2L < symmNum) {
 
 	    // Compute the source points in the cell
-	    GridPos3d(center, alphaAdjust, boxLen, n, CHEBYSHEV, sourcepos);
-	    //GetBoxNodes(sourcepos, n, boxLen, center, CHEBYSHEV);
+	    GridPos3d(center, alphaAdjust, boxLen, n, CHEB, sourcepos);
+	    //GetBoxNodes(sourcepos, n, boxLen, center, CHEB);
               
 	    // Compute the kernel at each of the field points 
 	    EvaluateKernelCell(fieldpos, sourcepos, n3, n3, dof,
@@ -1217,7 +1217,7 @@ void ComputeKernelUnif(int n, int2 dof, kfun_t kfun, char *Kmat,
   int dof2 = dof.s * dof.f;
   double nodes[n], kernel[dof2];
   vec3 fieldpos, sourcepos;
-  GridPos1d(alphaAdjust, len, n, UNIFORM, nodes);
+  GridPos1d(alphaAdjust, len, n, UNIF, nodes);
 
   int vecSize = 2*n-1, reducedMatSize = pow(vecSize, 3);
   int M2LSize = dof2 * reducedMatSize;
@@ -1784,7 +1784,7 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
 
 
 	// the child's source value will not be used any more
-	if (grid_type == UNIFORM) {
+	if (grid_type == UNIF) {
 	  free(Schild), Schild = NULL;
 	  (*A)->leaves[i]->sourceval = NULL;
 	}
@@ -1853,7 +1853,7 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
 	
   }
 	
-  if (grid_type == UNIFORM) {
+  if (grid_type == UNIF) {
 	
     // pad the source value
     int padSize = (int)round(pow(2*n-1, 3));
@@ -2154,10 +2154,10 @@ void AddPBC( int lpbc, double *M, double **L, double *phi, int Nf,
      
     int n3s = n3*dof.s;
     double *Unif, *Cheb; // values on the uniform and Chebyshev grids
-    if (grid_type == UNIFORM) {
+    if (grid_type == UNIF) {
       Unif = M;
       Cheb = calloc( n3s, sizeof(double) );
-      Anterpolate(Unif, UNIFORM, Cheb, CHEBYSHEV, n, dof.s, Tkz);
+      Anterpolate(Unif, UNIF, Cheb, CHEB, n, dof.s, Tkz);
       M    = Cheb; // source values on the Chebyshev grids
     }
     
@@ -2171,11 +2171,11 @@ void AddPBC( int lpbc, double *M, double **L, double *phi, int Nf,
     phi = Subtract( phi, Nff, PBCmean, dof.f ); // subtract mean
     free(PBCmean);
 
-    if (grid_type == UNIFORM) {
+    if (grid_type == UNIF) {
       free(Cheb);  // source values on the Chebyshev grids
       Cheb = (*L); // field  values on the Chebyshev grids
       Unif = calloc( n3f, sizeof(double) );
-      Interpolate(Cheb, CHEBYSHEV, Unif, UNIFORM, n, dof.f, Tkz);
+      Interpolate(Cheb, CHEB, Unif, UNIF, n, dof.f, Tkz);
       free(Cheb);
       (*L) = Unif;
     }
@@ -2248,7 +2248,7 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
   
   int lvl_shift;
   int Ksize;
-  if (homogen < HOMO_THRESHOLD) {
+  if ( !IsHomoKernel(homogen) ) {
     lvl_shift = (curTreeLevel>=2) ? curTreeLevel-2: 0;
     Ksize = 316*(2*n-1)*(2*n-1)*(2*n-1)*dof.s*dof.f;
      
@@ -2275,9 +2275,9 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
      
   double *productfre = NULL; // for uniform grids
   int matSizeDof;
-  if (grid_type == CHEBYSHEV)
+  if (grid_type == CHEB)
     matSizeDof = cutoff_f;
-  else if (grid_type == UNIFORM) {
+  else if (grid_type == UNIF) {
     matSizeDof = (int)round(pow(2*n-1,3)) *dof.f;
     productfre = fftw_alloc_real( matSizeDof );
     Zero(productfre, matSizeDof);
@@ -2324,14 +2324,14 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
       FFCoeff[j] = 0;
     }
 
-    if (grid_type == CHEBYSHEV) {
+    if (grid_type == CHEB) {
        
       Moment2Local(n, R, B->sourceval, FFCoeff, E + Ksize*lvl_shift, Ktable,
 		   dof, cutoff, VT + Vsize*lvl_shift, Kweights, grid_type);	      
       Pf = Add(Pf, FFCoeff, cutoff_f);
     }
 		
-    else if (grid_type == UNIFORM) {
+    else if (grid_type == UNIF) {
       Moment2Local(n, R, B->sourcefre, FFCoeff, E + Ksize*lvl_shift, Ktable, dof, cutoff, VT, Kweights, grid_type);
       productfre = Add(productfre, FFCoeff, matSizeDof);
     }
@@ -2339,7 +2339,7 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
 
   free(FFCoeff), FFCoeff=NULL;
      
-  if (grid_type == CHEBYSHEV) {
+  if (grid_type == CHEB) {
 
     int incr     =  1;
     char trans   = 'n';
@@ -2361,7 +2361,7 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
 
     F = Add(F, F_m2l, n*n*n*dof.f); // F of the root box has PBC stress
     
-  } else if (grid_type == UNIFORM) { // uniform grids
+  } else if (grid_type == UNIF) { // uniform grids
 	    
     int padSize = round(pow(2*n-1, 3));
     int l3Size = n, l1Size = (int)round(pow(l3Size, 2));
@@ -2470,7 +2470,7 @@ void Moment2Local(int n, double *R, double *cell_mpCoeff, double *FFCoeff,
   int ninteract = Ktable[49*k1+7*k2+k3];
   int count; 
      
-  if (grid_type == CHEBYSHEV) {
+  if (grid_type == CHEB) {
      
     for (l1=0;l1<n3;l1++) {
       tmp = Kweights[l1];
@@ -3019,7 +3019,7 @@ void ComputeSn(vec3 *point, int N, vec3 *Sn, int n, double *Tkz, int grid_type) 
      
   int i, k, m;
 
-  if (grid_type==CHEBYSHEV) {
+  if (grid_type==CHEB) {
 	    
     double pfac = 2./n;	    
     double *Tkz_m;
@@ -3037,7 +3037,7 @@ void ComputeSn(vec3 *point, int N, vec3 *Sn, int n, double *Tkz, int grid_type) 
     }
 
 	    
-  } else if (grid_type==UNIFORM){
+  } else if (grid_type==UNIF){
 	 
     for (m=0;m<n;m++) {
       k = m*N;
@@ -3063,13 +3063,13 @@ void GridPos1d(double alpha, double len, int n, int grid_type,
 	  
   int m;
   double L = AdjustBoxSize(len, alpha);
-  if (grid_type == CHEBYSHEV) {
+  if (grid_type == CHEB) {
     double pi = M_PI;
     for (m=0; m<n; m++)
       nodes[m] = cos(pi*((double)m+0.5)/(double)n) * L;
   }
 
-  else if (grid_type == UNIFORM)
+  else if (grid_type == UNIF)
     for (m=0; m<n; m++)
       nodes[m] = 1 - 2*(double)m/((double)(n-1)) * L;
 
@@ -3142,9 +3142,9 @@ void FrequencyProduct(int N, double *Afre, double *xfre, double *res) {
 void Unif2Cheb(double *U, double *C, int n, int dof) {
 
 double Ugrid[n];
-GridPos1d(n, 0, UNIFORM, Ugrid);
-//ComputeGrids(n, Ugrid, UNIFORM);
-//ComputeGrids(n, Ugrid, CHEBYSHEV);
+GridPos1d(n, 0, UNIF, Ugrid);
+//ComputeGrids(n, Ugrid, UNIF);
+//ComputeGrids(n, Ugrid, CHEB);
 
 // 3d uniform grids
 int l1, l2, l3, count, n3=n*n*n;
@@ -3160,9 +3160,9 @@ count++;
 }
   
 vec3 U2C[n3*n];
-ComputeSn(Ugrid_3d, n3, U2C, n, Tkz, CHEBYSHEV);
+ComputeSn(Ugrid_3d, n3, U2C, n, Tkz, CHEB);
 //ComputeTk(Tkz, n);
-//ComputeSn(Ugrid_3d, Tkz, n, n3, U2C, UNIFORM);
+//ComputeSn(Ugrid_3d, Tkz, n, n3, U2C, UNIF);
 
 int l4, j, k;
 double sum;
@@ -3188,9 +3188,9 @@ C[count++] = sum;
 void Cheb2Unif(double *C, double *U, int n, int dof) {
 
 double Cgrid[n];
-GridPos1d(n, 0, UNIFORM, Cgrid);
-//ComputeGrids(n, Cgrid, CHEBYSHEV);
-//ComputeGrids(n, Cgrid, UNIFORM);
+GridPos1d(n, 0, UNIF, Cgrid);
+//ComputeGrids(n, Cgrid, CHEB);
+//ComputeGrids(n, Cgrid, UNIF);
 
 // 3d Chebyshev grids
 int l1, l2, l3, count, n3=n*n*n;
@@ -3207,8 +3207,8 @@ count++;
 
   
 vec3 C2U[n3*n];
-//ComputeSn(Cgrid_3d, n3, n, C2U, UNIFORM);
-ComputeSn(Cgrid_3d, n3, C2U, n, Tkz, CHEBYSHEV);
+//ComputeSn(Cgrid_3d, n3, n, C2U, UNIF);
+ComputeSn(Cgrid_3d, n3, C2U, n, Tkz, CHEB);
 
 
 int i, k, l4, l;
@@ -3240,7 +3240,7 @@ void ComputeTkz(double *Tkz, int n) {
    
   // Compute n grids in [-1, 1]
   double nodes[n], vec[n];
-  GridPos1d(0, 1.0, n, CHEBYSHEV, nodes);
+  GridPos1d(0, 1.0, n, CHEB, nodes);
 	
   int i, k, m;
   double x;
@@ -3433,3 +3433,8 @@ double* MeanStressFmm(const double *ChebyshevWeightField, const int n, const int
 }
 
  
+bool IsHomoKernel( double homogen ) {
+  return fabs(homogen) > HOMO_THRESHOLD;
+}
+
+

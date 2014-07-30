@@ -16,8 +16,8 @@
 
   
 typedef enum {
-  UNIFORM,
-  CHEBYSHEV,
+  UNIF,
+  CHEB,
 } gridT;
   
 
@@ -448,6 +448,9 @@ void ComputeSn(vec3 *point, int N, vec3 *Sn, int n, double *Tkz, int grid_type);
 void ComputeTkz(double *T, int n);
 
 inline bool Is_well_separated(vec3 p, double L);
+
+inline bool IsHomoKernel( double homogen );
+
 
 /*
   inline void InBoxCheck( double x ) {

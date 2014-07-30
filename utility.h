@@ -8,7 +8,7 @@
 
 #define DEBUG(x) do {				\
     if (debugging_enabled) {			\
-      printf("[ %s: %i ] %s\n",			\
+      printf("[%s: %i] %s\n",			\
 	     __FILE__, __LINE__, x);		\
     }						\
   } while (0)					\

@@ -15,6 +15,29 @@ void Poly0Fun (vec3* fieldpos, vec3* sourcepos, double *K) {
   *K = 1.0;
 }
 
+void Poly1Fun (vec3* fieldpos, vec3* sourcepos, double *K) {
+
+  vec3 diff;
+
+  diff.x = sourcepos->x - fieldpos->x;
+  diff.y = sourcepos->y - fieldpos->y;
+  diff.z = sourcepos->z - fieldpos->z;
+
+  *K = diff.x * diff.y * diff.z;
+}
+
+void Poly3Fun (vec3* fieldpos, vec3* sourcepos, double *K) {
+
+  vec3 diff;
+
+  diff.x = sourcepos->x - fieldpos->x;
+  diff.y = sourcepos->y - fieldpos->y;
+  diff.z = sourcepos->z - fieldpos->z;
+
+  *K = diff.x * diff.x * diff.y * diff.y * diff.y * diff.z;
+}
+
+
 
 /*********************************
  *    LAPLACIAN KERNEL (1/r)     *
