@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <sys/time.h>  // for 'struct timeval', 'gettimeofday()' and 'evaltime()'
-#include <sys/types.h>
-#include <sys/stat.h>  // create directory
+#include <sys/time.h>       // for 'struct timeval', 'gettimeofday()' and 'evaltime()'
+#include <sys/types.h>      // create directory
+#include <sys/stat.h>       // create directory
 #include <math.h>
+
+#include "AnisoFunctions.h" // for 'gqwp()'
 #include "utility.h"
 
 #define EQUAL_DOUBLE_EPS 1e-6
@@ -74,6 +76,25 @@ void create_directory( char *name ) {
       printf("Create '%s' dirctory.\n", name);
       mkdir(name, 0775);
     }
+}
+
+
+//int     NGAUSS;
+double *GAUSSP;
+double *GAUSSW;
+
+//void SetGaussOrder(int N) { NGAUSS = N;}
+
+void InitGaussQuadrature(int N) {
+  GAUSSP = malloc(N*sizeof(double));
+  GAUSSW = malloc(N*sizeof(double));
+  gqwp(N, GAUSSP, GAUSSW);
+}
+
+
+void CleanGaussQuadrature() {
+  free(GAUSSP);
+  free(GAUSSW);
 }
 
 

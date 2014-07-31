@@ -29,15 +29,16 @@ typedef enum {
 
   
 typedef struct {
-  srcT  src_t;  // source type: points or segments
-  vec3 *source; // point source
-  segT *seg;    // segment source
+  srcT  src_t;    // source type: points or segments
+  vec3 *source;   // point source
+  vec3 *midpnt;   // middle point in a segment
+  segT *segment;  // segment source
 
-  double *q;    // source intensity
-  double *burg; // burger's vector    (for segment)
+  double *q;      // source intensity
+  double *burger; // burger's vector    (for segment)
 
-  int Ns;       // source size
-  int nGauss;   // Gauss quadrature # (for segment)
+  int Ns;         // source size
+  int nGauss;     // Gauss quadrature # (for segment)
 } FMMSrc;
   
   
@@ -200,13 +201,12 @@ void FMMDistribute(nodeT *A, vec3 *field, vec3 *source,
   #elif TENSOR
 */
 
-void FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
-		double *K, double *U, 
-		double *VT, double *Tkz, int *Ktable, double *Kweights,
-		double *Cweights, int2 cutoff, int n, int2 dof,
-		double alpha, double *phi, int
-		grid_type, double boxLen, int lpbc,
-		kernel_t kernel);
+double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
+		   double *K, double *U, 
+		   double *VT, double *Tkz, int *Ktable, double *Kweights,
+		   double *Cweights, int2 cutoff, int n, int2 dof,
+		   double alpha, int grid_type, double boxLen, int lpbc,
+		   kernel_t kernel);
 
 /*
  * Function: FMMCleanup
@@ -227,9 +227,8 @@ int SetParam(char *options, fmmparam *param);
 /* This function computes the Gaussian points along the segments in 
  * a leaf box with their quadrature weights
  */
-void LineIntegral(segT *segment, vec3 *midpoint, int Ns,
-		  int *sourcelist, double *gpoint, double
-		  L, vec3 scenter, vec3 *sourcet, double *xi);
+void LineIntegral(FMMSrc fmm_src, int *sourcelist, int Ns, double L,
+		  vec3 scenter, vec3 *sourcet, double *xi);
 
 
 /*
@@ -350,19 +349,18 @@ double AdjustBoxSize(double Len, double alpha);
   #elif TENSOR
 */
   
-void UpwardPass(nodeT **A, vec3 *source, double *q,
-		double *Cweights, double *Tkz,
-		int2 cutoff, int n, int dof, int grid_type);
+void UpwardPass(nodeT **A, FMMSrc fmm_src, double *Cweights, double *Tkz,
+		int n, int dof, double alpha, int grid_type);
 
 
 void Moment2Moment(int n, double *r, double *Schild, double *SS, 
 		   int dof, double *Cweights);
 
-void Particle2Moment(nodeT **A, segT *segment, double *burg, 
-		     vec3 *midpoint, int n, double *Tkz, int dof, 
-		     double *gpoint, double *gweight,
-		     double alpha, int grid_type);
+void P2M_SEG(nodeT **A, FMMSrc fmm_src, int n, int dof, double *Tkz, 
+	     double alpha, int grid_type);
 
+void P2M_PNT(nodeT **A, FMMSrc fmm_src, int n, int dof, double *Tkz, gridT grid_type);
+  
 /*
  * Function: FMMInteraction
  * ---------------------------------------------------------------------
@@ -404,10 +402,9 @@ void Moment2Local(int n, double *R, double *cell_mpCoeff,
   #elif TENSOR
 */
   
-void DownwardPass(nodeT **A, vec3 *field, vec3 *source, 
-		  double *Cweights, double *Tkz, double *q,
-		  int2 cutoff, int n, int2 dof,
-		  double alpha, kfun_t kfun,
+void DownwardPass(nodeT **A, vec3 *field, FMMSrc fmm_src,
+		  double *Cweights, double *Tkz,
+		  int n, int2 dof, double alpha, kfun_t kfun,
 		  double *phi, int grid_type);
 
 
@@ -451,7 +448,9 @@ inline bool Is_well_separated(vec3 p, double L);
 
 inline bool IsHomoKernel( double homogen );
 
+vec3* ComputeMiddlePoint( segT *segment, int Ns );
 
+  
 /*
   inline void InBoxCheck( double x ) {
   if (fabs(x) > 1)

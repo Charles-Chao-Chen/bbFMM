@@ -34,7 +34,7 @@ void run_test(int n, kernel_t kernel, gridT grid) {
 		    .q      = q,
 		    .source = source};
   */
-  FMMSrc fmm_src = {PNT, source, NULL, q, NULL, Ns, 0};
+  FMMSrc fmm_src = {PNT, source, NULL, NULL, q, NULL, Ns, 0};
   double *phiFmm = bbfmm( fmm_src, field, Nf, dof, box_len, alpha,
 			  n, grid, kernel, level_tree, level_pbc,
 			  epsilon );

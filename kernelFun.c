@@ -86,8 +86,7 @@ void LapforceFun (vec3* fieldpos, vec3* sourcepos, double *K) {
   diff.z = sourcepos->z - fieldpos->z;
   rinv   = 1./sqrt(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
 
-  *K =  diff.x*diff.x*diff.x  * rinv*rinv*rinv*rinv*rinv;
-  /*
+  //*K =  diff.x*diff.x*diff.x  * rinv*rinv*rinv*rinv*rinv;
   int idof, dof2 = 54;
   double axis;
   for (idof=0; idof < dof2; idof++) {
@@ -100,7 +99,6 @@ void LapforceFun (vec3* fieldpos, vec3* sourcepos, double *K) {
     
     K[idof] = axis*axis*axis * rinv*rinv*rinv*rinv*rinv;
   }
-  */
 }
 
 
@@ -552,16 +550,16 @@ void Segment2Point(segT *segment, int segmentSize, double *burg, int
   gqwp(numGauss, gpoint, gweight); // Gauss points go from 1 to -1
         
   for (i=0; i<segmentSize; i++) {
-    xi[3*i+0] = (segment[i].p2.x - segment[i].p1.x)/2;
-    xi[3*i+1] = (segment[i].p2.y - segment[i].p1.y)/2;
-    xi[3*i+2] = (segment[i].p2.z - segment[i].p1.z)/2;
+    xi[3*i+0] = (segment[i].p_end.x - segment[i].p_beg.x)/2;
+    xi[3*i+1] = (segment[i].p_end.y - segment[i].p_beg.y)/2;
+    xi[3*i+2] = (segment[i].p_end.z - segment[i].p_beg.z)/2;
   }
         
   for (i=0; i<segmentSize; i++) 
     for (j=0;j<numGauss;j++) {
-      source[i*numGauss+j].x = (segment[i].p1.x+segment[i].p2.x)/2 + xi[3*i+0] * gpoint[j];
-      source[i*numGauss+j].y = (segment[i].p1.y+segment[i].p2.y)/2 + xi[3*i+1] * gpoint[j];
-      source[i*numGauss+j].z = (segment[i].p1.z+segment[i].p2.z)/2 + xi[3*i+2] * gpoint[j];
+      source[i*numGauss+j].x = (segment[i].p_end.x + segment[i].p_beg.x)/2 + xi[3*i+0] * gpoint[j];
+      source[i*numGauss+j].y = (segment[i].p_end.y + segment[i].p_beg.y)/2 + xi[3*i+1] * gpoint[j];
+      source[i*numGauss+j].z = (segment[i].p_end.z + segment[i].p_beg.z)/2 + xi[3*i+2] * gpoint[j];
     }
         
   int k, l, count=0;

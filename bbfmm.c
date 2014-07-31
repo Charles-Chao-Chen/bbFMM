@@ -5,27 +5,19 @@
 #include "bbfmm.h"
 
 
-#define FFTW_FLAG FFTW_ESTIMATE // option for fftw plan type
-#define HOMO_THRESHOLD 1e-1     // threshold of homogeneous kenrel
+#define FFTW_FLAG       FFTW_ESTIMATE // option for fftw plan type
+#define HOMO_THRESHOLD  1e-1          // threshold for homogeneous kenrel
 
-#define NUMGAUSS 10          // Gauss quadrature points
+//#define NUMGAUSS 10                   // Gauss quadrature points
 // choose to match the interpolation accuracy
 
-/*
-  INPUT: epsilon: target accuracy; this is used to determine which
-  singular values are kept after the SVD. cutoff.s and cutoff.f are computed
-  using this epsilon.
-*/
+
 /*
   #ifdef LINEINT
   void bbfmm(vec3 *field, segT *segment, double *burg, int Nf, int Ns,
   int2 dof, double boxLen, double alpha, int treeLevel, int n,
   kernel_t kernel, double epsilon,
   double *stressFmm, int grid_type, int lpbc) {
-  
-
-  // In tensor version, 'alpha' should always be 0 for best accuracy
-  #elif TENSOR	
 */
   
 double* bbfmm( FMMSrc fmm_src, vec3 *field, int Nf, int2 dof,
@@ -35,35 +27,34 @@ double* bbfmm( FMMSrc fmm_src, vec3 *field, int Nf, int2 dof,
 
   
   vec3 *source = fmm_src.source;
-  int Ns       = fmm_src.Ns;
+  int   Ns     = fmm_src.Ns;
 
     
   timeType t0 = Timer();          // Begin pre-computation timing
 
 
-  /* ---- Compute the Chebyshev weights and set up the lookup table ---- */
+  /* ---- Compute the Chebyshev weights and the lookup table ---- */
 
   int n2 = n*n;          // n2 = n^2
   int n3 = n2*n;         // n3 = n^3
 
-  int    Ktable[343];    // Cell index within three layers on every side: 7^3 = 343
-  double Kweights[n3];   // Omega matrix 
-  double Cweights[2*n2]; // Chebyshev interpolation coefficients: Sn (page 8715)
-  double Tkz[n2];        // Evaluation of n chebyshev nodes (of T_n) on
-			 // n chebyshev polynomials from T_0 to T_{n-1}
+  int    Ktable  [ 343]; // Cell index within three layers on every side: 7^3 = 343
+  double Kweights[  n3]; // Omega matrix for SVD
+  double Cweights[2*n2]; // X2X operator (Sn on page 8715)
+  double Tkz     [  n2]; // Evaluation of n chebyshev nodes (of T_n) on
+			 // chebyshev polynomials from T_0 to T_{n-1}
 
   ComputeWeights(Tkz,Ktable,Kweights,Cweights,n,alpha,grid_type);
 
 
   /* ---- Build FMM tree ---- */  
 
-  nodeT  *tree;       // Octree for FMM hierarchy
-  tree = BuildTree(boxLen, treeLevel, n);
+  nodeT  *tree = BuildTree(boxLen, treeLevel, n);
 
 
   /* ---- Precompute M2L operator ---- */
     
-  int2   cutoff;      // Compression index of SVD
+  int2    cutoff;     // Compression index of SVD
   double *K  = NULL;  // K: C^{(i)} the compressed M2L operator 
   double *U  = NULL;  // U: U^k_r p. 8719; downward pass; field
   double *VT = NULL;  // V: S^K_r p. 8718; upward pass; source
@@ -72,30 +63,11 @@ double* bbfmm( FMMSrc fmm_src, vec3 *field, int Nf, int2 dof,
 	 treeLevel, &K, &U, &VT, grid_type);
     
 
-  /*
-    #ifdef LINEINT
-    // Compute the midpoint of every segment
-    int i;
-    vec3 *midpoint;
-    midpoint = (vec3 *) malloc(Ns * sizeof(vec3));
-
-    for (i=0; i<Ns; i++) {
-    midpoint[i].x = (segment[i].p1.x + segment[i].p2.x)/2;
-    midpoint[i].y = (segment[i].p1.y + segment[i].p2.y)/2;
-    midpoint[i].z = (segment[i].p1.z + segment[i].p2.z)/2;
-    }
-
-    // Distribute the segments and field points, set up interaction list
-    // and Computes the octree
-    
-    FMMDistribute(tree,field,midpoint,Nf,Ns,treeLevel);
-        
-    #elif TENSOR
-
-    #endif
-  */
-    
-  FMMDistribute(tree,field,source,Nf,Ns,treeLevel);
+  if (fmm_src.src_t == SEG) {
+    fmm_src.midpnt  = ComputeMiddlePoint( fmm_src.segment, Ns );
+    FMMDistribute(tree, field, fmm_src.midpnt, Nf, Ns, treeLevel);
+  } else 
+    FMMDistribute(tree, field, source,         Nf, Ns, treeLevel);
 
   
   // End pre-computation timing
@@ -105,26 +77,10 @@ double* bbfmm( FMMSrc fmm_src, vec3 *field, int Nf, int2 dof,
   /* ---- FMM computation ---- */
   
   // allocate the FMM result array
-  double *stressFmm = calloc( Ns*dof.s, sizeof(double) );
-
-  FMMCompute(&tree, fmm_src, field, Nf, K, U, VT, Tkz,
-	     Ktable, Kweights, Cweights, cutoff, n, dof,
-	     alpha, stressFmm, grid_type, boxLen,
-	     lpbc, kernel);
-
-    
-  /*
-    #ifdef LINEINT
-
-    FMMCompute(&tree, field, Nf, segment, midpoint, burg, K, U, VT, Tkz,
-    Ktable, Kweights, Cweights, cutoff, n, dof,
-    alpha, stressFmm, grid_type,
-    boxLen, lpbc, kernel);
-    free(midpoint);
-        
-    #elif TENSOR
-  */
-
+  double *stressFmm = FMMCompute(&tree, fmm_src, field, Nf, K, U, VT, Tkz,
+				 Ktable, Kweights, Cweights, cutoff, n, dof,
+				 alpha, grid_type, boxLen, lpbc, kernel);
+  
 	
   // End FMM timing
   timeType t2 = Timer();
@@ -140,7 +96,11 @@ double* bbfmm( FMMSrc fmm_src, vec3 *field, int Nf, int2 dof,
   if (VT != NULL)
     free(VT);
 
-  /* ---- Output timing results ---- */
+  if (fmm_src.midpnt != NULL)
+    free(fmm_src.midpnt);
+
+
+  /* ---- Output and return ---- */
   
   printf("Pre-Comp Time : %f seconds\n", t1-t0);
   printf("FMM      Time : %f seconds\n", t2-t1);
@@ -399,9 +359,6 @@ void FMMDistribute(nodeT *A, vec3 *field, vec3 *source, int Nf,
   double *phi, int grid_type, double boxLen, int lpbc,
   kernel_t kernel) {
     
-  // Upward pass : Recursive call M2M 0- SVD compression Step 8718 - 3a
-  // Loop over the level - Keep that - Tkz : info about Chebychev's coeffs.
-  // Independent of the Kernel
   // Compute the Guassian quadrature points and weights
   double *gpoint  = (double *) malloc(NUMGAUSS * sizeof(double));
   double *gweight = (double *) malloc(NUMGAUSS * sizeof(double));
@@ -419,37 +376,41 @@ void FMMDistribute(nodeT *A, vec3 *field, vec3 *source, int Nf,
   #elif TENSOR
 */
      
-void FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
-		double *K, double *U, double *VT, double *Tkz,
-		int *Ktable, double *Kweights, double *Cweights,
-		int2 cutoff, int n, int2 dof, double alpha, 
-		double *phi, int grid_type, double boxLen, int lpbc,
-		kernel_t kernel) {
+double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
+		   double *K, double *U, double *VT, double *Tkz,
+		   int *Ktable, double *Kweights, double *Cweights,
+		   int2 cutoff, int n, int2 dof, double alpha, 
+		   int grid_type, double boxLen, int lpbc,
+		   kernel_t kernel) {
 
-  vec3 *source = fmm_src.source;
-  double *q    = fmm_src.q;
   
+  if (fmm_src.src_t == SEG)
+    InitGaussQuadrature(fmm_src.nGauss);
+
   printf("Begin upward pass ...\n");
-  UpwardPass(A, source, q, Cweights, Tkz, cutoff,
-	     n, dof.s, grid_type);
+  UpwardPass(A, fmm_src, Cweights, Tkz, n, dof.s, alpha, grid_type);
 
-  
-    
+  if (fmm_src.src_t == SEG)
+    CleanGaussQuadrature();
+
+
+  double *phi = calloc( Nf*dof.f, sizeof(double) );
   AddPBC( lpbc, (*A)->sourceval, &((*A)->fieldval), phi, Nf,
 	  n, dof, boxLen, alpha, Tkz, kernel, grid_type );
 
   // Compute cell interactions.
-  // '0' for the root in the FMM tree
   printf("Begin M2L ...\n");
+  int root_level = 0;
   FMMInteraction(A, K, Ktable, U, VT, Kweights, n, dof, cutoff,
-		 kernel.homogen, 0, grid_type);  
+		 kernel.homogen, root_level, grid_type);  
 
 
   printf("Begin downward pass ...\n");
-
-  DownwardPass(A, field, source, Cweights, Tkz, q, cutoff, n, dof,
+  DownwardPass(A, field, fmm_src, Cweights, Tkz, n, dof,
 	       alpha, kernel.kfun, phi, grid_type);
 
+  return phi;
+  
   /*
     #ifdef LINEINT
     // Downward pass
@@ -459,7 +420,7 @@ void FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
         
     #endif
   */
-    
+  
 }
 
 
@@ -612,13 +573,15 @@ void FMMCleanup(nodeT *A) {
  * 	sourcet - Gauss points along the segments transformed into a unit cube
  *	xi - Jacobi of the integral
  */ 
-void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
-		  *sourcelist, double *gpoint, double L, vec3
-		  scenter, vec3 *sourcet, double *xi){
+void LineIntegral( FMMSrc fmm_src, int *sourcelist, int Ns, double L,
+		   vec3 scenter, vec3 *sourcet, double *xi){
   
 
-  vec3 *source;
-  source = (vec3 *) malloc(NUMGAUSS * Ns * sizeof(vec3));
+  int   nGauss   = fmm_src.nGauss;
+  segT *segment  = fmm_src.segment;
+  vec3 *midpoint = fmm_src.midpnt;
+  
+  vec3 *source = (vec3 *) malloc(nGauss * Ns * sizeof(vec3));
   vec3 p1, p2, midpt;
 
   double lx, ly, lz;
@@ -627,8 +590,8 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
   count = 0;
   for (i=0; i<Ns; i++) {
     k  = sourcelist[i];
-    p1 = segment[k].p1;
-    p2 = segment[k].p2;
+    p1 = segment[k].p_beg;
+    p2 = segment[k].p_end;
     midpt = midpoint[k];
 
     // Check: the sign cosistant with the order of gauss points
@@ -641,16 +604,16 @@ void LineIntegral(segT *segment, vec3 *midpoint, int Ns, int
     lz = xi[3*i+2];
 
     // Gaussian points along the segment
-    for (j=0; j<NUMGAUSS; j++, count++) {
-      source[count].x = midpt.x + gpoint[j] * lx;
-      source[count].y = midpt.y + gpoint[j] * ly;
-      source[count].z = midpt.z + gpoint[j] * lz;
+    for (j=0; j<nGauss; j++, count++) {
+      source[count].x = midpt.x + GAUSSP[j] * lx;
+      source[count].y = midpt.y + GAUSSP[j] * ly;
+      source[count].z = midpt.z + GAUSSP[j] * lz;
     }
   }
 
   // Map all of the source points to the box ([-1 1])^3
   double ihalfL = 2.0 / L;
-  int numSource = Ns * NUMGAUSS;
+  int numSource = Ns * nGauss;
 
   for (j=0;j<numSource;j++) {
     sourcet[j].x = ihalfL*(source[j].x - scenter.x);
@@ -1646,6 +1609,10 @@ void InteractionList(nodeT *A, int levels) {
  
 /*
  * Function: Upward Pass
+ * Recursive call M2M - SVD compression Step 8718 - 3a
+ * Loop over the level - Keep that - Tkz : info about Chebychev's coeffs.
+ * Independent of the Kernel
+ *
  * Input:
  *
  *   	   A: Pointer to the pointer of a box in the hierarchy tree so *A is 
@@ -1729,14 +1696,10 @@ void InteractionList(nodeT *A, int levels) {
   #elif TENSOR
 */
   
-void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
-		double *Tkz, int2 cutoff,
-		int n, int dof, int grid_type) {
+void UpwardPass(nodeT **A, FMMSrc fmm_src, double *Cweights,
+		double *Tkz, int n, int dof, double alpha, int grid_type) {
 
-  int Ns = (*A)->Ns;                  // Number of source points
   
-
-
   int i, l;
   int dofn3 = dof * n*n*n;
 
@@ -1762,9 +1725,8 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
 	                
 	  #elif TENSOR
 	*/
-	UpwardPass(&((*A)->leaves[i]), source, q, Cweights, Tkz,
-		   cutoff, n, dof, grid_type);
-		
+	UpwardPass(&((*A)->leaves[i]), fmm_src, Cweights, Tkz,
+		   n, dof, alpha, grid_type);
 	
 
 	double *Schild;      
@@ -1789,68 +1751,16 @@ void UpwardPass(nodeT **A, vec3 *source, double *q, double *Cweights,
 	  (*A)->leaves[i]->sourceval = NULL;
 	}
 
-
 	(*A)->sourceval = Add((*A)->sourceval, SS, dofn3);
       }
     }
 	  
-  } else {    
+  } else { // leaf boxes
 
-    /*
-      #ifdef LINEINT            
-		    
-      Particle2Moment(A, segment, burg, midpoint, n, Tkz, dof, gpoint, gweight, alpha, grid_type);
-
-      //print_array((*A)->sourceval, dofn3, "Source weights");
-	  
-      #elif TENSOR
-    */
-      
-    int j, k, l1, l2, l3, l4, *sourcelist = (*A)->sourcelist;
-    double ihalfL = 2./(*A)->length;
-    vec3 sourcet[Ns], Ss[n*Ns], scenter = (*A)->center;
-
-    // Map all of the source points to the box ([-1 1])^3
-    for (j=0;j<Ns;j++) {
-      k = sourcelist[j];
-      sourcet[j].x = ihalfL*(source[k].x - scenter.x);
-      sourcet[j].y = ihalfL*(source[k].y - scenter.y);
-      sourcet[j].z = ihalfL*(source[k].z - scenter.z);
-    }
-	
-    // Compute Ss, the mapping function for the sources
-    ComputeSn(sourcet, Ns, Ss, n, Tkz, grid_type);
-        
-    // Compute the source values
-    (*A)->sourceval = (double *)calloc(dofn3,sizeof(double));
-    double *S = (*A)->sourceval;
-
-    int x_idx, y_idx, z_idx, lhs_idx, rhs_idx;
-    double weight;
-
-    lhs_idx = 0;
-    for (l1=0;l1<n;l1++) {
-      x_idx = l1*Ns;
-      for (l2=0;l2<n;l2++) {
-	y_idx = l2*Ns;
-	for (l3=0;l3<n;l3++) {
-	  z_idx = l3*Ns;
-
-	  for (j=0; j<Ns; j++) {
-	    weight = Ss[x_idx+j].x *Ss[y_idx+j].y *Ss[z_idx+j].z;
-	    rhs_idx = sourcelist[j] * dof;
-		  
-	    for (l4=0; l4<dof; l4++)
-	      S[lhs_idx+l4] += weight * q[rhs_idx++];
-
-	  }
-	  lhs_idx += dof;
-		
-	}
-      }
-    }
-
-	
+    if (fmm_src.src_t == SEG) // optimized P2M for segments
+      P2M_SEG(A, fmm_src, n, dof, Tkz, alpha, grid_type);
+    else 
+      P2M_PNT(A, fmm_src, n, dof, Tkz, grid_type);	
   }
 	
   if (grid_type == UNIF) {
@@ -2001,6 +1911,59 @@ void Moment2Moment(int n, double *r, double *Schild, double *SS,
 }
 
 
+void P2M_PNT(nodeT **A, FMMSrc fmm_src, int n, int dof, double *Tkz, gridT grid_type) {
+  
+  int Ns = (*A)->Ns; // Number of source points in a leaf box
+  int j, k, l1, l2, l3, l4, *sourcelist = (*A)->sourcelist;
+  double ihalfL = 2./(*A)->length;
+  vec3 sourcet[Ns], Ss[n*Ns], scenter = (*A)->center;
+
+  vec3 *source = fmm_src.source;
+  double *q = fmm_src.q;
+    
+  // Map all of the source points to the box ([-1 1])^3
+  for (j=0;j<Ns;j++) {
+    k = sourcelist[j];
+    sourcet[j].x = ihalfL*(source[k].x - scenter.x);
+    sourcet[j].y = ihalfL*(source[k].y - scenter.y);
+    sourcet[j].z = ihalfL*(source[k].z - scenter.z);
+  }
+	
+  // Compute Ss, the mapping function for the sources
+  ComputeSn(sourcet, Ns, Ss, n, Tkz, grid_type);
+        
+  // Compute the source values
+  int dofn3 = dof * n*n*n;
+  (*A)->sourceval = (double *)calloc(dofn3,sizeof(double));
+  double *S = (*A)->sourceval;
+
+  int x_idx, y_idx, z_idx, lhs_idx, rhs_idx;
+  double weight;
+
+  lhs_idx = 0;
+  for (l1=0;l1<n;l1++) {
+    x_idx = l1*Ns;
+    for (l2=0;l2<n;l2++) {
+      y_idx = l2*Ns;
+      for (l3=0;l3<n;l3++) {
+	z_idx = l3*Ns;
+
+	for (j=0; j<Ns; j++) {
+	  weight = Ss[x_idx+j].x *Ss[y_idx+j].y *Ss[z_idx+j].z;
+	  rhs_idx = sourcelist[j] * dof;
+		  
+	  for (l4=0; l4<dof; l4++)
+	    S[lhs_idx+l4] += weight * q[rhs_idx++];
+
+	}
+	lhs_idx += dof;
+		
+      }
+    }
+  }
+}
+
+
 /* Function: P2M
  *   Input:
  *
@@ -2053,18 +2016,18 @@ void Moment2Moment(int n, double *r, double *Schild, double *SS,
  *	
  */
 
-void Particle2Moment(nodeT **A, segT *segment, double *burg, vec3 *midpoint,
-		     int n, double *Tkz, int dof,
-		     double *gpoint, double *gweight, double alpha, int grid_type) {
-    
+void P2M_SEG(nodeT **A, FMMSrc fmm_src, int n, int dof, double *Tkz,
+	     double alpha, int grid_type) {
+
+  int     nGauss = fmm_src.nGauss;
+  double *burg   = fmm_src.burger;
+  
   int  Ns         = (*A)->Ns;             // Number of source points
   int  dofn3      = dof * n*n*n;
+  int  numSource  = Ns  * nGauss;
   int *sourcelist = (*A)->sourcelist; 	  // Indices of sources in cell
   vec3 scenter    = (*A)->center;    	  // Center of source cell
-    
-  double *S;
-  int numSource = Ns * NUMGAUSS;
-  vec3 *Ss = (vec3 *)malloc(n * numSource * sizeof(vec3));	
+  vec3 *Ss        = (vec3 *)malloc(n * numSource * sizeof(vec3));	
 	
     
   // Adjust box size to accomodate outside segments
@@ -2073,15 +2036,14 @@ void Particle2Moment(nodeT **A, segT *segment, double *burg, vec3 *midpoint,
   // Compute source points from every segment in the unit box
   double *xi = (double *) malloc(3 * Ns * sizeof(double)); 
   vec3 *sourcet = (vec3 *)malloc(numSource * sizeof(vec3));
-  LineIntegral(segment, midpoint, Ns, sourcelist, gpoint, L,
-	       scenter, sourcet, xi);
+  LineIntegral(fmm_src, sourcelist, Ns, L, scenter, sourcet, xi);
     
   // Compute Ss, the mapping function for the sources
   ComputeSn(sourcet, numSource, Ss, n, Tkz, grid_type);
     
   // Compute the source values
   (*A)->sourceval = (double *)calloc(dofn3,sizeof(double));
-  S = (*A)->sourceval;
+  double *S = (*A)->sourceval;
     
   /* How is dof used?
      q stores many right hand sides (columns). That is we are computing
@@ -2101,14 +2063,14 @@ void Particle2Moment(nodeT **A, segT *segment, double *burg, vec3 *midpoint,
 	      
 	for (j=0;j<Ns;j++) {
 	  sum = 0;
-	  for (l5=0;l5<NUMGAUSS;l5++) {
+	  for (l5=0;l5<nGauss;l5++) {
 	    /* Row major storage of data in q
 	     * row = sourcelist[j]
 	     * column = l4
 	     */
 	    // page 8716 Eq. 1
-	    indx = j*NUMGAUSS + l5;
-	    sum += gweight[l5] * Ss[l1*numSource+indx].x *
+	    indx = j*nGauss + l5;
+	    sum += GAUSSW[l5] * Ss[l1*numSource+indx].x *
 	      Ss[l2*numSource+indx].y * Ss[l3*numSource+indx].z;
 			    
 	  }
@@ -2131,9 +2093,11 @@ void Particle2Moment(nodeT **A, segT *segment, double *burg, vec3 *midpoint,
   free(Ss);
   free(sourcet);
 
-
-  //printf("Ns: %d\n", Ns);
-  //print_array((*A)->sourceval, dofn3, "Source weights");
+  /*
+  printf("\n\n");
+  printf("Ns: %d\n", Ns);
+  print_array((*A)->sourceval, dofn3, "Source weights");
+  */
 }
 
       
@@ -2600,14 +2564,11 @@ void Moment2Local(int n, double *R, double *cell_mpCoeff, double *FFCoeff,
 	
   #elif TENSOR
 */
-void DownwardPass(nodeT **A, vec3 *field, vec3 *source, 
-		  double *Cweights, double *Tkz, double *q,
-		  int2 cutoff, int n, int2 dof,
-		  double alpha, kfun_t kfun, double
-		  *phi, int grid_type) {
+void DownwardPass(nodeT **A, vec3 *field, FMMSrc fmm_src, 
+		  double *Cweights, double *Tkz,
+		  int n, int2 dof, double alpha, kfun_t kfun,
+		  double *phi, int grid_type) {
 
-
-  //printf("Inside DownPass.\n");
   
   /* Add the contributions from the parent cell to each child cell -
    * otherwise compute all direct interactions and then interpolate 
@@ -2645,78 +2606,76 @@ void DownwardPass(nodeT **A, vec3 *field, vec3 *source,
 	  #elif TENSOR
 	*/
 	  
-	DownwardPass(&((*A)->leaves[i]), field, source, Cweights,
-		     Tkz, q, cutoff, n, dof, alpha, kfun, phi,
-		     grid_type);
+	DownwardPass(&((*A)->leaves[i]), field, fmm_src, Cweights, Tkz,
+		     n, dof, alpha, kfun, phi, grid_type);
                                                          
       }
     }   
 		
-  } else { 
+  } else { // This is a leaf of the FMM tree.
 	
-      
-    /* This is a leaf of the FMM tree. We interpolate to the particle location.
-       L2P operator. */
     Local2Particle(A, field, Tkz, n, dof.f, alpha, phi, grid_type);
-
-    //printf("L2P finished.\n");
-    
-    //#ifdef TENSOR
 
 
     /* Due to near field interactions */
+    if (fmm_src.src_t == PNT) {
 
-    int Nf = (*A)->Nf, i, j, k, m, l;
-    int *fieldlist   = (*A)->fieldlist;
-    int nneigh       = (*A)->ineigh;
-    vec3 *fieldpos   = malloc( Nf * sizeof(vec3) );
-    double *fieldval = malloc( dof.f * Nf * sizeof(double) );
+      vec3   *source = fmm_src.source;
+      double *q      = fmm_src.q;
+
+  
+      int  i, j, k, m, l;
+      int  Nf = (*A)->Nf;
+      int  nneigh      = (*A)->ineigh;
+      int *fieldlist   = (*A)->fieldlist;
+      vec3   *fieldpos = malloc(         Nf * sizeof(vec3)   );
+      double *fieldval = malloc( dof.f * Nf * sizeof(double) );
 
       
-    // Obtain the positions of the field points
-    for (i=0;i<Nf;i++) {
-      k = fieldlist[i];
-      fieldpos[i].x = field[k].x;
-      fieldpos[i].y = field[k].y;
-      fieldpos[i].z = field[k].z;
-    }
-
-    for (m=0;m<nneigh;m++) {
-      nodeT *B        = (*A)->neighbors[m];
-      vec3 cshift     = (*A)->cshiftneigh[m];
-      int  Ns         = B->Ns;
-      int *sourcelist = B->sourcelist;
-      vec3 *sourcepos = malloc( Ns *       sizeof(vec3) );
-      double *qsource = malloc( dof.s*Ns * sizeof(double) );
-      
-      for (j=0;j<Ns;j++) {
-	l = sourcelist[j];
-	sourcepos[j].x = source[l].x + cshift.x;
-	sourcepos[j].y = source[l].y + cshift.y;
-	sourcepos[j].z = source[l].z + cshift.z;
-	for (k=0;k<dof.s;k++)
-	  qsource[dof.s*j+k] = q[dof.s*l+k];
-      }
-
-      EvaluateField(fieldpos, sourcepos, qsource, Nf, Ns, dof,
-		    kfun, fieldval);
-      
+      // Obtain the positions of the field points
       for (i=0;i<Nf;i++) {
-	j = dof.f * fieldlist[i];
-	l = dof.f * i;
-	for (k=0;k<dof.f;k++) {
-	  //phi[j+k] += q[j]*fieldval[l+k];
-	  phi[j+k] += fieldval[l+k];
-	}
+	k = fieldlist[i];
+	fieldpos[i].x = field[k].x;
+	fieldpos[i].y = field[k].y;
+	fieldpos[i].z = field[k].z;
       }
+
+      for (m=0;m<nneigh;m++) {
+	nodeT *B        = (*A)->neighbors[m];
+	vec3 cshift     = (*A)->cshiftneigh[m];
+	int  Ns         = B->Ns;
+	int *sourcelist = B->sourcelist;
+	vec3 *sourcepos = malloc(       Ns * sizeof(vec3)   );
+	double *qsource = malloc( dof.s*Ns * sizeof(double) );
       
-      free(sourcepos);
-      free(qsource);
-    }
+	for (j=0;j<Ns;j++) {
+	  l = sourcelist[j];
+	  sourcepos[j].x = source[l].x + cshift.x;
+	  sourcepos[j].y = source[l].y + cshift.y;
+	  sourcepos[j].z = source[l].z + cshift.z;
+	  for (k=0;k<dof.s;k++)
+	    qsource[dof.s*j+k] = q[dof.s*l+k];
+	}
 
-    free(fieldval);
-    free(fieldpos);
+	EvaluateField(fieldpos, sourcepos, qsource, Nf, Ns, dof,
+		      kfun, fieldval);
+      
+	for (i=0;i<Nf;i++) {
+	  j = dof.f * fieldlist[i];
+	  l = dof.f * i;
+	  for (k=0;k<dof.f;k++) {
+	    //phi[j+k] += q[j]*fieldval[l+k];
+	    phi[j+k] += fieldval[l+k];
+	  }
+	}
+      
+	free(sourcepos);
+	free(qsource);
+      }
 
+      free(fieldval);
+      free(fieldpos);
+    } // fi: point source
   }
 }
 
@@ -3435,6 +3394,22 @@ double* MeanStressFmm(const double *ChebyshevWeightField, const int n, const int
  
 bool IsHomoKernel( double homogen ) {
   return fabs(homogen) > HOMO_THRESHOLD;
+}
+
+
+// Compute the midpoint of every segment
+vec3* ComputeMiddlePoint( segT *segment, int Ns ) {
+
+  vec3 *midpoint = (vec3 *) malloc(Ns * sizeof(vec3));
+  
+  int i;
+  for (i=0; i<Ns; i++) {
+    midpoint[i].x = (segment[i].p_beg.x + segment[i].p_end.x)/2;
+    midpoint[i].y = (segment[i].p_beg.y + segment[i].p_end.y)/2;
+    midpoint[i].z = (segment[i].p_beg.z + segment[i].p_end.z)/2;
+  }
+
+  return midpoint;
 }
 
 

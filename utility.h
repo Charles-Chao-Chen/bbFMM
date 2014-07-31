@@ -22,7 +22,12 @@
     }							\
   } while(0)						\
 
-  
+
+// global varibale for Gauss quadrature
+extern double *GAUSSP;
+extern double *GAUSSW;
+
+
 /* Function: Timer
  * ----------------------------------------
  * Returns the time in seconds.
@@ -41,8 +46,8 @@ typedef struct {
 
 // 3d segment
 typedef struct {
-  vec3 p1;
-  vec3 p2;
+  vec3 p_beg;
+  vec3 p_end;
 } segT;
 
 
@@ -96,6 +101,9 @@ void print_array( const double *arr, const int N, const char *arr_name );
 // create the directory if not exist
 inline void create_directory( char *name);
 
+// initialize Gauss quadrature points and weights
+void InitGaussQuadrature(int N);
+void CleanGaussQuadrature();
 
 #ifdef __cplusplus
 extern "C" {
