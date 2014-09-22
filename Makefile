@@ -11,7 +11,7 @@ LD = gcc
 # and use 'extern "C"{}' to declare lapack routines
 LDPATH  = -L /usr/bin/ld
 LDFLAGS = -lblas -llapack -lfftw3 -lm 
-FLAGS   = -Wall -O3 -g -I $(BLAS_INCLUDE) -I $(FFTW_INCLUDE)
+FLAGS   = -Wall -g -I $(BLAS_INCLUDE) -I $(FFTW_INCLUDE)
 PFLAG   =
 
 

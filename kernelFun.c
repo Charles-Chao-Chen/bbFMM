@@ -645,7 +645,8 @@ static double AdjustBoxSize(double L, double alpha){
  * Forms the matrix that describes the interactions of the computational
  * cell with its periodic images up to lpbc shells.
  */
-void CreateTableCorrection(kfun_t kfun, int n, int2 dof, double alpha, int lpbc, double *Tkz, char* PBCfilename) {	    
+void CreateTableCorrection(kfun_t kfun, int n, int2 dof, double alpha,
+			   int lpbc, double *Tkz, char *PBCfilename) {	    
 
    
   int n3 = n*n*n, i, j, k, l, m, l1, l2, l3, count;              
@@ -683,7 +684,7 @@ void CreateTableCorrection(kfun_t kfun, int n, int2 dof, double alpha, int lpbc,
   ComputeWeightsPBC(UpMat, n, alpha, Tkz);
 
     
-  int dof2 = dof.f * dof.s;
+  int  dof2 = dof.f * dof.s;
   char transa='n';
   double a = 1, b = 0;
   int incr=1;
@@ -783,10 +784,10 @@ void CreateTableCorrection(kfun_t kfun, int n, int2 dof, double alpha, int lpbc,
     scale *= 3.0;		
   } // ipbc
         
-  free(UpMat), UpMat=NULL;
-  free(Ulevel), Ulevel=NULL;
-  free(KPBC_j), KPBC_j=NULL;
-  free(MMresult), MMresult=NULL;
+  free(UpMat),    UpMat    = NULL;
+  free(Ulevel),   Ulevel   = NULL;
+  free(KPBC_j),   KPBC_j   = NULL;
+  free(MMresult), MMresult = NULL;
         
   //char KPBCfile[50];
   //sprintf(KPBCfile, "Kn%dpbc%d.out", n, lpbc);

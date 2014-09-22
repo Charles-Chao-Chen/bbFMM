@@ -1,3 +1,20 @@
+DONE: Bug fixed in Is_well_separated() which is mistakenly using abs(),
+	instead of fabs().
+
+TODO: 
+(1) debug PBC for current code. The functionality are sured to
+be correct, but some parameters maybe messed up or the interface
+is not used correctly.
+(2) consider using 'nGauss' in 'FMMSrc' to be a global variable,
+just like 'GAUSSP' and 'GAUSSW'.
+(3) merge 'EvaluateKernelCell()' and 'EvaluateField()' because of
+similar functionality.
+(4) speed issue: this code is much slower than Eric's C++ code.
+For a case of 8e5 pts with level=5 and order=3, the C++ code takes 18s,
+while the C code takes 32s for fmm computation only (no precomputation
+included).
+
+
 TODO: consider more symmetry in Chebyshev pre-computation.
 Only the r- symmetry is currently considered, 
 i.e. f(r) ?= f(-r).

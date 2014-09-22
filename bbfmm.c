@@ -388,8 +388,11 @@ double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
     InitGaussQuadrature(fmm_src.nGauss);
 
   printf("Begin upward pass ...\n");
+  timeType t1 = Timer();
   UpwardPass(A, fmm_src, Cweights, Tkz, n, dof.s, alpha, grid_type);
-
+  timeType t2 = Timer();
+  printf("Time for upward pass: %f\n", t2-t1);
+  
   if (fmm_src.src_t == SEG)
     CleanGaussQuadrature();
 
@@ -401,26 +404,21 @@ double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
   // Compute cell interactions.
   printf("Begin M2L ...\n");
   int root_level = 0;
+  t1 = Timer();
   FMMInteraction(A, K, Ktable, U, VT, Kweights, n, dof, cutoff,
 		 kernel.homogen, root_level, grid_type);  
-
+  t2 = Timer();
+  printf("Time for upward pass: %f\n", t2-t1);
 
   printf("Begin downward pass ...\n");
+  t1 = Timer();
   DownwardPass(A, field, fmm_src, Cweights, Tkz, n, dof,
 	       alpha, kernel.kfun, phi, grid_type);
+  t2 = Timer();
+  printf("Time for upward pass: %f\n", t2-t1);
 
-  return phi;
   
-  /*
-    #ifdef LINEINT
-    // Downward pass
-    DownwardPass(A,field,Cweights,Tkz,n,dof.f, alpha, phi, grid_type);
-        
-    #elif TENSOR
-        
-    #endif
-  */
-  
+  return phi; 
 }
 
 
@@ -2234,7 +2232,11 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
   double L     = (*A)->length;    // Length of cell
   double iL    = 1.0/L;           // Inverse-length  
   double scale = pow(iL,homogen); // Scaling factor for M2L
-          
+
+  printf("Box size: %f\n", L);
+
+
+  
   assert((*A)->Nf > 0); /* Cell cannot be empty. */
      
   double *productfre = NULL; // for uniform grids
@@ -2418,7 +2420,7 @@ void Moment2Local(int n, double *R, double *cell_mpCoeff, double *FFCoeff,
 
   // 3a in page 8718
   int incr = 1;
-  double  alpha = 1, beta = 0;
+  double alpha = 1, beta = 0;
   char trans = 'n';
 
   // Compute the field proxy values: Matrix Vector multiplication in
@@ -2431,7 +2433,10 @@ void Moment2Local(int n, double *R, double *cell_mpCoeff, double *FFCoeff,
   int k1 = (int)round(R[0]) + 3;
   int k2 = (int)round(R[1]) + 3;
   int k3 = (int)round(R[2]) + 3;
+
+  // note that k1, k2 and k3 are integers from 0 to 6.
   int ninteract = Ktable[49*k1+7*k2+k3];
+  assert(ninteract != -1);
   int count; 
      
   if (grid_type == CHEB) {
@@ -3254,9 +3259,15 @@ double AdjustBoxSize(double L, double alpha){
 
 // check if two boxes are well seperated
 bool Is_well_separated(vec3 p, double L) {
+  /*
   int x = round(abs((1.0 / L) * p.x));
   int y = round(abs((1.0 / L) * p.y));
   int z = round(abs((1.0 / L) * p.z));
+*/
+    
+  int x = round(fabs(p.x / L));
+  int y = round(fabs(p.y / L));
+  int z = round(fabs(p.z / L));
   return x > 1 || y > 1 || z > 1;
 }
  

@@ -8,8 +8,8 @@ void segmentFMM (int argc, char *argv[]);
 int  main       (int argc, char *argv[]) {
 
 
-  //particleFMM(argc, argv);
-  segmentFMM (argc, argv);
+  particleFMM(argc, argv);
+  //segmentFMM (argc, argv);
   
 
   return 0;
