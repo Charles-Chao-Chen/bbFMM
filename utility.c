@@ -5,6 +5,7 @@
 #include <sys/types.h>      // create directory
 #include <sys/stat.h>       // create directory
 #include <math.h>
+#include <time.h>           // for srand()
 
 #include "AnisoFunctions.h" // for 'gqwp()'
 #include "utility.h"
@@ -149,7 +150,9 @@ double ComputeL2Err(double *x, double *y, int N) {
  */
 void SetSources(vec3 *field, int Nf, vec3 *source, int Ns, double *q,
 		int dof, double L) {
-	
+
+  srand( time(NULL) );
+  
   int i, j, k=0;
 	
   // Distributes the sources randomly uniformly in a cubic cell

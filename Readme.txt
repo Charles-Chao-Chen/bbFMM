@@ -1,3 +1,6 @@
+TODO: P2P is slow, consider avoiding copying sources (charges) and fields
+	around. Instead, record their indices as in Eric's code.
+
 DONE: Bug fixed in Is_well_separated() which is mistakenly using abs(),
 	instead of fabs().
 

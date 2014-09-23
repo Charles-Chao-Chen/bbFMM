@@ -11,14 +11,6 @@
 //#define NUMGAUSS 10                   // Gauss quadrature points
 // choose to match the interpolation accuracy
 
-
-/*
-  #ifdef LINEINT
-  void bbfmm(vec3 *field, segT *segment, double *burg, int Nf, int Ns,
-  int2 dof, double boxLen, double alpha, int treeLevel, int n,
-  kernel_t kernel, double epsilon,
-  double *stressFmm, int grid_type, int lpbc) {
-*/
   
 double* bbfmm( FMMSrc fmm_src, vec3 *field, int Nf, int2 dof,
 	       double boxLen, double alpha, int n, gridT grid_type,
@@ -1682,18 +1674,6 @@ void InteractionList(nodeT *A, int levels) {
  * of pseudo-charges located at the Chebyshev nodes of the parent cell.
  * (upward pass of BBFMM)
  */
-
-/*
-  #ifdef LINEINT
-  void UpwardPass(nodeT **A, segT *segment, vec3 *midpoint, double
-  *Cweights, double *Tkz, double *burg, int n,
-  int dof, double *gpoint, double *gweight,
-  double alpha, int grid_type) {
-
-
-  #elif TENSOR
-*/
-  
 void UpwardPass(nodeT **A, FMMSrc fmm_src, double *Cweights,
 		double *Tkz, int n, int dof, double alpha, int grid_type) {
 
@@ -1914,8 +1894,10 @@ void P2M_PNT(nodeT **A, FMMSrc fmm_src, int n, int dof, double *Tkz, gridT grid_
   int Ns = (*A)->Ns; // Number of source points in a leaf box
   int j, k, l1, l2, l3, l4, *sourcelist = (*A)->sourcelist;
   double ihalfL = 2./(*A)->length;
-  vec3 sourcet[Ns], Ss[n*Ns], scenter = (*A)->center;
-
+  vec3 scenter = (*A)->center;
+  vec3 *sourcet = malloc(  Ns * sizeof(vec3));
+  vec3 *Ss      = malloc(n*Ns * sizeof(vec3));
+  
   vec3 *source = fmm_src.source;
   double *q = fmm_src.q;
     
@@ -2218,9 +2200,6 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
     lvl_shift = 0;
     Ksize = 316 * cutoff.f * cutoff.s;
   }
-
-      
-  //printf("shift inside M2L:%d\n", shift);
      
   int i, j, l;
   int n3       = n*n*n; 
@@ -2232,10 +2211,6 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
   double L     = (*A)->length;    // Length of cell
   double iL    = 1.0/L;           // Inverse-length  
   double scale = pow(iL,homogen); // Scaling factor for M2L
-
-  printf("Box size: %f\n", L);
-
-
   
   assert((*A)->Nf > 0); /* Cell cannot be empty. */
      
@@ -2400,14 +2375,12 @@ void Moment2Local(int n, double *R, double *cell_mpCoeff, double *FFCoeff,
 		  double *E, int *Ktable, int2 dof, int2 cutoff, double *VT, 
 		  double *Kweights, int grid_type) {
 
-  /* TODO: The current code computes 'CompCoeff' each times for the
-     same 'cell_mpCoeff' when
-     *       the cell is in the interaction list of multiple cells. And
-     one optimization is to
-     *       overwrite 'cell_mpCoeff' with 'CompCoeff' and set the flag,
-     so the next time
-     *       'CompCoeff' can be used directly
-     */
+  /* TODO:
+   * The current code computes 'CompCoeff' each times for the
+   * same 'cell_mpCoeff' when  the cell is in the interaction list of multiple cells. And
+   * one optimization is to overwrite 'cell_mpCoeff' with 'CompCoeff' and set the flag,
+   * so the next time 'CompCoeff' can be used directly
+   */
      
   int n3 = n*n*n, cutoff_f = cutoff.f, cutoff_s = cutoff.s;
   int cutoff2  = cutoff_f * cutoff_s;
@@ -2480,25 +2453,6 @@ void Moment2Local(int n, double *R, double *cell_mpCoeff, double *FFCoeff,
   }
 }
 
-/*
- * Function: FMMInteractionPBC
- * ---------------------------------------------------------------------
- * Add the interactions due to the periodic images.
- */
-/*
-  void FMMInteractionPBC(nodeT **A, double *KPBC, int n, dof2 *dof) {
-  int dofn3_s = dof->s * n*n*n;
-  int dofn3_f = dof->f * n*n*n;
-  double *F, *S;
-  char trans[]="n";
-  double alpha=1, beta=0;
-  int incr=1;
-	
-  F = (*A)->fieldval;
-  S = (*A)->sourceval;
-  dgemv_(trans,&dofn3_f,&dofn3_s,&alpha,KPBC,&dofn3_f,S,&incr,&beta,F,&incr);
-  }
-*/
 
 /*
  * Function: Downward Pass
@@ -2559,16 +2513,6 @@ void Moment2Local(int n, double *R, double *cell_mpCoeff, double *FFCoeff,
  * Chebyshev interpolation. (downward pass of BBFMM)  3c already done. 
  * Only differnece with Upward pass.
  */
-
-/*
-  #ifdef LINEINT
-  void DownwardPass(nodeT **A, vec3 *field, double *Cweights,
-  double *Tkz, 
-  int n, int dof, double alpha, double *phi,
-  int grid_type) {
-	
-  #elif TENSOR
-*/
 void DownwardPass(nodeT **A, vec3 *field, FMMSrc fmm_src, 
 		  double *Cweights, double *Tkz,
 		  int n, int2 dof, double alpha, kfun_t kfun,
@@ -2579,11 +2523,10 @@ void DownwardPass(nodeT **A, vec3 *field, FMMSrc fmm_src,
    * otherwise compute all direct interactions and then interpolate 
    * to the field points */
   if ((*A)->leaves[0] != NULL) {
-	
-    double *F = (*A)->fieldval;              // Field values for cell 
 
-    //print_array(F, n*n*n*dof, "DownwardPass");
-	    
+    // Field values for cell 
+    double *F = (*A)->fieldval;
+
     // Determine which children cells contain field points
     int i, l;
     for (i=0;i<8;i++) {
@@ -2602,18 +2545,9 @@ void DownwardPass(nodeT **A, vec3 *field, FMMSrc fmm_src,
 	    r[l] =  1;
 		    
 	Local2Local(n, r, F, Fchild, dof.f, Cweights, grid_type);
-
-	/*
-	  #ifdef LINEINT
-	  // Recursively compute field values
-	  DownwardPass(&((*A)->leaves[i]),field,Cweights,Tkz,n,dof, alpha, phi, grid_type);
-		
-	  #elif TENSOR
-	*/
 	  
 	DownwardPass(&((*A)->leaves[i]), field, fmm_src, Cweights, Tkz,
-		     n, dof, alpha, kfun, phi, grid_type);
-                                                         
+		     n, dof, alpha, kfun, phi, grid_type);                                                         
       }
     }   
 		
@@ -2669,7 +2603,6 @@ void DownwardPass(nodeT **A, vec3 *field, FMMSrc fmm_src,
 	  j = dof.f * fieldlist[i];
 	  l = dof.f * i;
 	  for (k=0;k<dof.f;k++) {
-	    //phi[j+k] += q[j]*fieldval[l+k];
 	    phi[j+k] += fieldval[l+k];
 	  }
 	}
@@ -2681,6 +2614,8 @@ void DownwardPass(nodeT **A, vec3 *field, FMMSrc fmm_src,
       free(fieldval);
       free(fieldpos);
     } // fi: point source
+
+    
   }
 }
 
