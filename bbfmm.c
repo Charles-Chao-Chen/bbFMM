@@ -201,25 +201,28 @@ void StartPrecompute(double boxLen, int treeLevel, int n, int2 dof, kernel_t ker
   fwrite(&treeLevel, sizeof(int), 1, fK); // write tree level
   fclose(fK);	     		 
 
+  bool first_time_call = true;
+  
   if ( IsHomoKernel(kernel.homogen) ) {  // homogeneours kernel
 
     double unit_len = 1.0;
-    compute_m2l_operator(n, dof, kernel, Kmat, Umat, Vmat, unit_len, alpha, Kweights, epsilon, grid_type);
+    compute_m2l_operator(n, dof, kernel, Kmat, Umat, Vmat, unit_len, alpha, Kweights, epsilon, grid_type, first_time_call);
     
   } else {                                // non-homogeneous kernel
 
     int j;
     double boxLenLevel = boxLen/4;        // FMM starts from the second level
     for (j=2; j<=treeLevel; j++) {
-      compute_m2l_operator(n, dof, kernel, Kmat, Umat, Vmat, boxLenLevel, alpha, Kweights, epsilon, grid_type);
+      compute_m2l_operator(n, dof, kernel, Kmat, Umat, Vmat, boxLenLevel, alpha, Kweights, epsilon, grid_type, first_time_call);
       boxLenLevel/=2;
+      first_time_call = false;
     }
 
   }                                       // end non-homogeneous kernel
 }
 
 
-void compute_m2l_operator (int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double l, double alpha, double *Kweights, double epsilon, int grid_type) {
+void compute_m2l_operator (int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double l, double alpha, double *Kweights, double epsilon, int grid_type, bool first_time_call) {
 
   switch (grid_type) {
       
@@ -228,7 +231,7 @@ void compute_m2l_operator (int n, int2 dof, kernel_t kernel, char *Kmat, char *U
     break;
   case CHEB:
     ComputeKernelCheb(Kweights, n, kernel, epsilon, dof,
-		      Kmat, Umat, Vmat, alpha, l);
+		      Kmat, Umat, Vmat, alpha, l, first_time_call);
     break;
   }
 }
@@ -350,10 +353,10 @@ double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
     InitGaussQuadrature(fmm_src.nGauss);
 
   printf("Begin upward pass ...\n");
-  timeType t1 = Timer();
+  //timeType t1 = Timer();
   UpwardPass(A, fmm_src, Cweights, Kweights, VT, Tkz, n, dof.s, cutoff.s, alpha, grid_type, kernel.homogen, root_level);
-  timeType t2 = Timer();
-  printf("Time for upward pass: %f\n", t2-t1);
+  //timeType t2 = Timer();
+  //printf("Time for upward pass: %f\n", t2-t1);
   
   if (fmm_src.src_t == SEG)
     CleanGaussQuadrature();
@@ -365,18 +368,18 @@ double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
 
   // Compute cell interactions.
   printf("Begin M2L ...\n");
-  t1 = Timer();
+  //t1 = Timer();
   FMMInteraction(A, K, Ktable, U, VT, Kweights, n, dof, cutoff,
 		 kernel.homogen, root_level, grid_type);  
-  t2 = Timer();
-  printf("Time for upward pass: %f\n", t2-t1);
+  //t2 = Timer();
+  //printf("Time for upward pass: %f\n", t2-t1);
 
   printf("Begin downward pass ...\n");
-  t1 = Timer();
+  //t1 = Timer();
   DownwardPass(A, field, fmm_src, Cweights, Tkz, n, dof,
 	       alpha, kernel.kfun, phi, grid_type);
-  t2 = Timer();
-  printf("Time for upward pass: %f\n", t2-t1);
+  //t2 = Timer();
+  //printf("Time for upward pass: %f\n", t2-t1);
 
   
   return phi; 
@@ -789,13 +792,10 @@ void ComputeWeights(double *Tkz, int *Ktable, double *Kweights,
 void ComputeKernelCheb(double *Kweights, int n, kernel_t
 		       kernel, double epsilon, int2 dof, char
 		       *Kmat, char *Umat, char *Vmat,
-		       double alphaAdjust, double boxLen) {
+		       double alphaAdjust, double boxLen, bool first_time_call) {
    
   kfun_t kfun = kernel.kfun;
   int symm    = kernel.symm;
-      
-  static int callTime = -1;
-  callTime++; // callTime = 0 for the first time called
 
   int i, j, l, m, m1, k1, k2, k3, l1, z;
   int count, count1, count2, count3;
@@ -929,7 +929,7 @@ void ComputeKernelCheb(double *Kweights, int n, kernel_t
   FILE *ptr_file;
 
   double sumsqr, sum, epsqr;
-  if (callTime == 0) { // The first time called
+  if (first_time_call) { // The first time called
 	 
     // Determine the number of singular values to keep. We use epsilon for this.
     sumsqr = 0;
@@ -964,23 +964,11 @@ void ComputeKernelCheb(double *Kweights, int n, kernel_t
 
   double trancatedSize = dofn3_f * cutoff.f;
   ptr_file = fopen(Umat, "ab");
-
-  // zero file
-  //double *UU = calloc( trancatedSize, sizeof(double) );
+  FILE_CHECK( ptr_file, Umat );
+  
   fwrite(U0, sizeof(double), trancatedSize, ptr_file);
-  //fwrite(UU, sizeof(double), trancatedSize, ptr_file);
   fclose(ptr_file);
-	
-  /*
-    char sinfile[50];
-    sprintf(sinfile, "FieldSign%dA%.2f.out", n, AnisoParameters->elasA);
-    ptr_file = fopen(sinfile, "w");
-    fprintf(ptr_file, "%d\n", cutoff.f);
 
-    for (i=0; i<Sigma_size; i++)
-    fprintf(ptr_file, "%e\n", Sigma[i]);
-    fclose(ptr_file);
-  */
   free(Sigma); Sigma = NULL;
 	
 	
@@ -1010,7 +998,7 @@ void ComputeKernelCheb(double *Kweights, int n, kernel_t
   dgesvd_(nosave,save,&rows_f,&dofn3_s,K0,&rows_f,Sigma,U1,&nosavedim,VT0,&dofn3_s,
 	  work,&lwork,&info);
 
-  if (callTime == 0) {
+  if (first_time_call) {
 	 
     // Determine the number of singular values to keep. We use
     // epsilon for this.
@@ -1039,8 +1027,7 @@ void ComputeKernelCheb(double *Kweights, int n, kernel_t
   }
   else {
     ptr_file = fopen(Vmat, "rb");
-    if (ptr_file == NULL)
-      printf("Can't read cutoff.s!\n");
+    FILE_CHECK( ptr_file, Vmat );
     READ_CHECK( fread(&cutoff.s, sizeof(int), 1, ptr_file), 1 );
     fclose(ptr_file);
   }
@@ -1050,10 +1037,6 @@ void ComputeKernelCheb(double *Kweights, int n, kernel_t
 
   ptr_file = fopen(Vmat, "ab");
 
-  //double *VV = calloc( dofn3_s*cutoff.s, sizeof(double) );
-  //fwrite(VV, sizeof(double), dofn3_s*cutoff.s, ptr_file);
-      
-
   for (j=0;j<dofn3_s;j++) { // column
     count1 = j*dofn3_s;
     fwrite(VT0+count1, sizeof(double), cutoff.s, ptr_file);
@@ -1061,15 +1044,6 @@ void ComputeKernelCheb(double *Kweights, int n, kernel_t
 
   fclose(ptr_file);
 
-  /*
-    sprintf(sinfile, "SourceSign%dA%.2f.out", n, AnisoParameters->elasA);
-    ptr_file = fopen(sinfile, "w");
-    fprintf(ptr_file, "%d\n", cutoff.s);
-    for (i=0; i<Sigma_size; i++)
-    fprintf(ptr_file, "%e\n", Sigma[i]);
-    fclose(ptr_file);
-  */
-      
   /** Computing the compressed kernel using the orthonormal basis U and VT.
    **/
   char *transa, *transb;

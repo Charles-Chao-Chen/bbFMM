@@ -1,3 +1,7 @@
+DONE: The first time calling non-homogeneous kernel breaks down. 
+	(call it a second time would work well.)
+	using static variable in ComputeKernelCheb() causes the problem.
+
 DONE: Optimization in Moment2Local(); apply V^T earlier in UpwardPass().
 
 TODO: P2P is slow, consider avoiding copying sources (charges) and fields

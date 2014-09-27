@@ -159,7 +159,7 @@ bool PrecomputeAvailable( char *Kmat, char *Umat, char *Vmat,
 void StartPrecompute(double boxLen, int treeLevel, int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double alpha, double *Kweights, double epsilon, int grid_type);
 
      
-void compute_m2l_operator (int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double l, double alpha, double *Kweights, double epsilon, int grid_type);
+void compute_m2l_operator (int n, int2 dof, kernel_t kernel, char *Kmat, char *Umat, char *Vmat, double l, double alpha, double *Kweights, double epsilon, int grid_type, bool first_time_call);
      
 /*
  * Function: FMMReadMatrices
@@ -188,19 +188,6 @@ void FMMDistribute(nodeT *A, vec3 *field, vec3 *source,
  * ------------------------------------------------------------------
  * Computes the field using BBFMM.
  */
-/*
-  #ifdef LINEINT
-  void FMMCompute(nodeT **A, vec3 *field, int Nf, segT *segment, 
-  vec3 * midpoint, double *burg, double *K, double *U, 
-  double *VT, double *Tkz, int *Ktable, double *Kweights,
-  double *Cweights, int2 cutoff, int n, 
-  int2 dof, double alpha, double *phi,
-  int grid_type, double boxLen, int lpbc,
-  kernel_t kernel);
-
-  #elif TENSOR
-*/
-
 double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
 		   double *K, double *U, 
 		   double *VT, double *Tkz, int *Ktable, double *Kweights,
@@ -272,7 +259,7 @@ void ComputeWeights(double *Tkz, int *Ktable, double *Kweights,
 void ComputeKernelCheb(double *Kweights, int n, kernel_t kernel,
 		       double epsilon, int2 dof,
 		       char *Kmat, char *Umat, char *Vmat, double
-		       alpha, double boxLen);
+		       alpha, double boxLen, bool first_time_call);
 
 
 /*
