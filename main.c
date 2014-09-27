@@ -100,11 +100,14 @@ void particleFMM(int argc, char *argv[]) {
   /* kernel_t struct: {name, homogen, symmetry, kernelFunction}
    * name can be arbitrary string given by user
    * homogen = log_2 ( f(r) / f(2r) )
+   * symm=-1,1 for anti-symmetry and symmetry
    * kernel function has to be defined first
    */
-  //kernel_t kernel = {"gaussian",  0.0,  0, &GaussianFun};
-  kernel_t kernel = {"laplace", 1.0, 1, &LaplacianFun};
-
+  kernel_t kernel = {"gaussian",  0.0,  0, &GaussianFun};
+  //kernel_t kernel = {"laplace", 1.0, 1, &LaplacianFun};
+  //kernel_t kernel = {"poly3", 0,  1, &Poly3Fun};
+  //kernel_t kernel = {"poly3", -6,  1, &Poly3Fun};
+    
   
   FMMSrc fmm_src = {PNT, source, NULL, NULL, q, NULL, Ns, 0};
   double *phiFmm = bbfmm( fmm_src, field, Nf, dof, box_len, alpha,

@@ -1,3 +1,5 @@
+DONE: Optimization in Moment2Local(); apply V^T earlier in UpwardPass().
+
 TODO: P2P is slow, consider avoiding copying sources (charges) and fields
 	around. Instead, record their indices as in Eric's code.
 
@@ -30,16 +32,16 @@ Created 'BuildTree()'.
 
 Changed 'dof2' to 'int2'.
 
-Replace fftw2 with fftw3. Done 
+DONE: Replace fftw2 with fftw3.
 
 Set uniform 'Umat' and 'Vmat' to be existing files
 in FMMSetup().
 
-uniform grids for non-homogeneous kernel. Done
+DONE: uniform grids for non-homogeneous kernel.
 
 Removed skipping level in non-homogeneous kernel
 
-Todo: use macro for read number check. Done
+DONE: use macro for read number check.
 
 Bug: Gaussian set for 54, but dof={1,1} in main.c
 

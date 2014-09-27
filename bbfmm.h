@@ -336,22 +336,11 @@ double AdjustBoxSize(double Len, double alpha);
  * Gathers the sources from the children cells and determines the strength
  * of pseudo-charges located at the Chebyshev nodes of the parent cell.
  * (upward pass of BBFMM)
- */
-
-/*
-  #ifdef LINEINT
-  void UpwardPass(nodeT **A, segT *segment, vec3 *midpoint,
-  double *Tkz, double *burg, double *Kweights, 
-  int n, int dof, double *gpoint,
-  double *gweight, double alpha, int grid_type);
-  //, double boxLen, double homogen, int lpbc, kfun_t kfun);
-
-  #elif TENSOR
-*/
-  
-void UpwardPass(nodeT **A, FMMSrc fmm_src, double *Cweights, double *Tkz,
-		int n, int dof, double alpha, int grid_type);
-
+ */  
+//void UpwardPass(nodeT **A, FMMSrc fmm_src, double *Cweights, double *Tkz,
+//		int n, int dof, double alpha, int grid_type);
+void UpwardPass(nodeT **A, FMMSrc fmm_src, double *Cweights, double *Kweights, double *VT,
+		double *Tkz, int n, int dof, int cutoff_s, double alpha, int grid_type, double homogen, int curTreeLevel);
 
 void Moment2Moment(int n, double *r, double *Schild, double *SS, 
 		   int dof, double *Cweights);
@@ -375,7 +364,7 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
 
 void Moment2Local(int n, double *R, double *cell_mpCoeff, 
 		  double *FFCoeff, double *E, int *Ktable, int2
-		  dof, int2 cutoff, double *VT, double *Kweights,
+		  dof, int2 cutoff,
 		  int grid_type);
 
 

@@ -22,6 +22,15 @@
     }							\
   } while(0)						\
 
+#define FILE_CHECK( fptr, fname ) do {				\
+    if (fptr == NULL) {						\
+      printf("Can't open file '%s' in '%s' at line %i.\n"	\
+	     , fname, __FILE__,  __LINE__);			\
+      assert(false);							\
+    }								\
+  } while(0)							\
+
+
 
 // global varibale for Gauss quadrature
 extern double *GAUSSP;

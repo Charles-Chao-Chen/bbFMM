@@ -8,9 +8,6 @@
 #define FFTW_FLAG       FFTW_ESTIMATE // option for fftw plan type
 #define HOMO_THRESHOLD  1e-1          // threshold for homogeneous kenrel
 
-//#define NUMGAUSS 10                   // Gauss quadrature points
-// choose to match the interpolation accuracy
-
   
 double* bbfmm( FMMSrc fmm_src, vec3 *field, int Nf, int2 dof,
 	       double boxLen, double alpha, int n, gridT grid_type,
@@ -341,33 +338,6 @@ void FMMDistribute(nodeT *A, vec3 *field, vec3 *source, int Nf,
  * ------------------------------------------------------------------
  * Computes the field using BBFMM.
  */
-/*
-  #ifdef LINEINT
-  void FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf, segT *segment, vec3 *
-  midpoint, double *burg, double *K, double *U,
-  double *VT, double *Tkz, int *Ktable,
-  double *Kweights, double *Cweights,
-  int2 cutoff, int n, int2 dof, double alpha,
-  double *phi, int grid_type, double boxLen, int lpbc,
-  kernel_t kernel) {
-    
-  // Compute the Guassian quadrature points and weights
-  double *gpoint  = (double *) malloc(NUMGAUSS * sizeof(double));
-  double *gweight = (double *) malloc(NUMGAUSS * sizeof(double));
-  gqwp(numgau, gpoint, gweight);
-    
-
-  printf("Begin upward pass ...\n");
-  UpwardPass(A, segment, midpoint, Cweights, Tkz, burg, n,
-  dof.s, gpoint, gweight, alpha, grid_type);
-    
-    
-  free(gpoint);
-  free(gweight);
-    
-  #elif TENSOR
-*/
-     
 double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
 		   double *K, double *U, double *VT, double *Tkz,
 		   int *Ktable, double *Kweights, double *Cweights,
@@ -375,13 +345,13 @@ double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
 		   int grid_type, double boxLen, int lpbc,
 		   kernel_t kernel) {
 
-  
+  int root_level = 0;
   if (fmm_src.src_t == SEG)
     InitGaussQuadrature(fmm_src.nGauss);
 
   printf("Begin upward pass ...\n");
   timeType t1 = Timer();
-  UpwardPass(A, fmm_src, Cweights, Tkz, n, dof.s, alpha, grid_type);
+  UpwardPass(A, fmm_src, Cweights, Kweights, VT, Tkz, n, dof.s, cutoff.s, alpha, grid_type, kernel.homogen, root_level);
   timeType t2 = Timer();
   printf("Time for upward pass: %f\n", t2-t1);
   
@@ -395,7 +365,6 @@ double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
 
   // Compute cell interactions.
   printf("Begin M2L ...\n");
-  int root_level = 0;
   t1 = Timer();
   FMMInteraction(A, K, Ktable, U, VT, Kweights, n, dof, cutoff,
 		 kernel.homogen, root_level, grid_type);  
@@ -979,13 +948,13 @@ void ComputeKernelCheb(double *Kweights, int n, kernel_t
 	 
     // Extract the needed columns from U0 and write out to a file
     ptr_file = fopen(Umat,"wb");
+    FILE_CHECK( ptr_file, Umat );
     fwrite(&cutoff.f, sizeof(int), 1, ptr_file);
     fclose(ptr_file);
   }
   else {
     ptr_file = fopen(Umat, "rb");
-    if (ptr_file == NULL)
-      printf("Can't read cutoff.f!\n");
+    FILE_CHECK( ptr_file, Umat );
     READ_CHECK( fread(&cutoff.f, sizeof(int), 1, ptr_file), 1 );
     fclose(ptr_file);
   }
@@ -1064,6 +1033,7 @@ void ComputeKernelCheb(double *Kweights, int n, kernel_t
     // VT0[dofn3_s][dofn3_s] and write out to a file
     
     ptr_file = fopen(Vmat,"wb");
+    FILE_CHECK( ptr_file, Vmat );
     fwrite(&cutoff.s, sizeof(int), 1, ptr_file);
     fclose(ptr_file);
   }
@@ -1265,7 +1235,6 @@ void ComputeKernelUnif(int n, int2 dof, kfun_t kfun, char *Kmat,
  * ------------------------------------------------------------------
  * Dynamically allocates space for a new node A in the octree and
  * initializes the quantities in the node.
- *
  */
 nodeT* NewNode(vec3 center, double L, int n) {
 	
@@ -1674,8 +1643,8 @@ void InteractionList(nodeT *A, int levels) {
  * of pseudo-charges located at the Chebyshev nodes of the parent cell.
  * (upward pass of BBFMM)
  */
-void UpwardPass(nodeT **A, FMMSrc fmm_src, double *Cweights,
-		double *Tkz, int n, int dof, double alpha, int grid_type) {
+void UpwardPass(nodeT **A, FMMSrc fmm_src, double *Cweights, double *Kweights, double *VT,
+		double *Tkz, int n, int dof, int cutoff_s, double alpha, int grid_type, double homogen, int curTreeLevel) {
 
   
   int i, l;
@@ -1694,17 +1663,8 @@ void UpwardPass(nodeT **A, FMMSrc fmm_src, double *Cweights,
     for (i=0;i<8;i++) {
       if ((*A)->leaves[i]->Ns != 0) { 
 
-
-	/*
-	  #ifdef LINEINT        
-	  // Recursively gather sources
-	  UpwardPass(&((*A)->leaves[i]),segment,midpoint,Cweights,Tkz,burg,
-	  n,dof,gpoint,gweight, alpha, grid_type);
-	                
-	  #elif TENSOR
-	*/
-	UpwardPass(&((*A)->leaves[i]), fmm_src, Cweights, Tkz,
-		   n, dof, alpha, grid_type);
+	UpwardPass(&((*A)->leaves[i]), fmm_src, Cweights, Kweights, VT, Tkz,
+		   n, dof, cutoff_s, alpha, grid_type, homogen, curTreeLevel+1);
 	
 
 	double *Schild;      
@@ -1782,6 +1742,40 @@ void UpwardPass(nodeT **A, FMMSrc fmm_src, double *Cweights,
     fftw_free(padx), padx=NULL;
     for (s=0; s<dof; s++)
       fftw_destroy_plan(p[s]);
+    
+  } else if (grid_type == CHEB) {
+
+    int l = 0, l1, l2;
+    int n3    = n*n*n;
+    int dofn3 = dof * n3;
+    double *x = (*A)->sourceval;
+    double tmp, Sw[dofn3];
+    
+    for (l1=0;l1<n3;l1++) {
+      tmp = Kweights[l1];
+      for (l2=0;l2<dof;l2++) {
+	Sw[l] = x[l] * tmp;
+	l++;
+      }
+    }
+
+    int incr = 1;
+    double a = 1, beta = 0;
+    char trans = 'n';
+
+    int Vsize  = dofn3 * cutoff_s;
+    int lvl_shift;
+    if ( !IsHomoKernel(homogen) ) {
+      lvl_shift = (curTreeLevel>=2) ? curTreeLevel-2: 0;
+    } else {
+      lvl_shift = 0;
+    }
+    
+    (*A)->proxysval = malloc(cutoff_s * sizeof(double));
+    dgemv_(&trans, &cutoff_s, &dofn3, &a, VT + Vsize*lvl_shift, &cutoff_s, Sw, &incr,
+	   &beta, (*A)->proxysval, &incr);
+
+    //print_array((*A)->proxysval, cutoff_s, "proxysval");
   }
 
 }
@@ -1941,6 +1935,9 @@ void P2M_PNT(nodeT **A, FMMSrc fmm_src, int n, int dof, double *Tkz, gridT grid_
       }
     }
   }
+
+  free(sourcet);
+  free(Ss);
 }
 
 
@@ -2194,20 +2191,21 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
   int Ksize;
   if ( !IsHomoKernel(homogen) ) {
     lvl_shift = (curTreeLevel>=2) ? curTreeLevel-2: 0;
-    Ksize = 316*(2*n-1)*(2*n-1)*(2*n-1)*dof.s*dof.f;
-     
   } else {
-    lvl_shift = 0;
-    Ksize = 316 * cutoff.f * cutoff.s;
+    lvl_shift = 0;    
   }
-     
+
+  if (grid_type == CHEB)
+    Ksize = 316 * cutoff.f * cutoff.s;
+  else if (grid_type == UNIF)
+    Ksize = 316*(2*n-1)*(2*n-1)*(2*n-1)*dof.s*dof.f;
+    
   int i, j, l;
   int n3       = n*n*n; 
   int dofn3_f  = dof.f * n3;
-  int dofn3_s  = dof.s * n3;
   int cutoff_f = cutoff.f;
   int Usize    = dofn3_f * cutoff.f;
-  int Vsize    = dofn3_s * cutoff.s;
+
   double L     = (*A)->length;    // Length of cell
   double iL    = 1.0/L;           // Inverse-length  
   double scale = pow(iL,homogen); // Scaling factor for M2L
@@ -2267,13 +2265,14 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
 
     if (grid_type == CHEB) {
        
-      Moment2Local(n, R, B->sourceval, FFCoeff, E + Ksize*lvl_shift, Ktable,
-		   dof, cutoff, VT + Vsize*lvl_shift, Kweights, grid_type);	      
+      Moment2Local(n, R, B->proxysval, FFCoeff, E + Ksize*lvl_shift, Ktable,
+		   dof, cutoff, grid_type);
+    
       Pf = Add(Pf, FFCoeff, cutoff_f);
     }
 		
     else if (grid_type == UNIF) {
-      Moment2Local(n, R, B->sourcefre, FFCoeff, E + Ksize*lvl_shift, Ktable, dof, cutoff, VT, Kweights, grid_type);
+      Moment2Local(n, R, B->sourcefre, FFCoeff, E + Ksize*lvl_shift, Ktable, dof, cutoff, grid_type);
       productfre = Add(productfre, FFCoeff, matSizeDof);
     }
   } // end for ninter
@@ -2372,26 +2371,14 @@ void FMMInteraction(nodeT **A, double *E, int *Ktable, double *U,
  *   FFCoeff:
  */
 void Moment2Local(int n, double *R, double *cell_mpCoeff, double *FFCoeff, 
-		  double *E, int *Ktable, int2 dof, int2 cutoff, double *VT, 
-		  double *Kweights, int grid_type) {
-
-  /* TODO:
-   * The current code computes 'CompCoeff' each times for the
-   * same 'cell_mpCoeff' when  the cell is in the interaction list of multiple cells. And
-   * one optimization is to overwrite 'cell_mpCoeff' with 'CompCoeff' and set the flag,
-   * so the next time 'CompCoeff' can be used directly
-   */
+		  double *E, int *Ktable, int2 dof, int2 cutoff, 
+		  int grid_type) {
      
-  int n3 = n*n*n, cutoff_f = cutoff.f, cutoff_s = cutoff.s;
-  int cutoff2  = cutoff_f * cutoff_s;
-  int dofn3    = dof.s * n*n*n;
-                    
-  // Final multipole expansion (Omega w) =  Sw ; v * Sw = Wl
-  int l = 0, l1, l2;
-  double tmp, Sw[dofn3];
-  double CompCoeff[cutoff_s];
 
-  // 3a in page 8718
+  int cutoff_f = cutoff.f, cutoff_s = cutoff.s;
+  int cutoff2  = cutoff_f * cutoff_s;
+
+
   int incr = 1;
   double alpha = 1, beta = 0;
   char trans = 'n';
@@ -2413,29 +2400,10 @@ void Moment2Local(int n, double *R, double *cell_mpCoeff, double *FFCoeff,
   int count; 
      
   if (grid_type == CHEB) {
-     
-    for (l1=0;l1<n3;l1++) {
-      tmp = Kweights[l1];
-      for (l2=0;l2<dof.s;l2++) {
-	Sw[l] = cell_mpCoeff[l] * tmp;
-	l++;
-      }
-    }
 
-    //print_array(cell_mpCoeff, dof.s*n*n*n, "cell_mpCoeff");
-    //print_array(Kweights, n*n*n, "Kweights");
-    //print_array(Sw, dof.s*n*n*n, "Sw");
-	  
-    dgemv_(&trans, &cutoff_s, &dofn3, &alpha, VT, &cutoff_s, Sw, &incr,
-	   &beta, CompCoeff, &incr);
-
-    //print_array(CompCoeff, cutoff_s, "CompCoeff");
-		  
     count = ninteract*cutoff2;
-    dgemv_(&trans,&cutoff_f,&cutoff_s,&alpha,E+count,&cutoff_f,CompCoeff,&incr,
+    dgemv_(&trans,&cutoff_f,&cutoff_s,&alpha,E+count,&cutoff_f,cell_mpCoeff,&incr,
 	   &beta,FFCoeff,&incr); // 3b  Ecell is the kernel
-
-    //print_array(FFCoeff, cutoff_f, "FFCoeff");
 		  
   } else {
 	

@@ -151,7 +151,7 @@ double ComputeL2Err(double *x, double *y, int N) {
 void SetSources(vec3 *field, int Nf, vec3 *source, int Ns, double *q,
 		int dof, double L) {
 
-  srand( time(NULL) );
+  //srand( time(NULL) );
   
   int i, j, k=0;
 	
