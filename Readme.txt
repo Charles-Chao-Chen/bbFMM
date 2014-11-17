@@ -1,3 +1,6 @@
+TODO: Remove the default assumption that the root center is at the
+	origin. Instead, compute the center and pass into FMM.
+
 DONE: The first time calling non-homogeneous kernel breaks down. 
 	(call it a second time would work well.)
 	using static variable in ComputeKernelCheb() causes the problem.

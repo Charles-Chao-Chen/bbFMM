@@ -22,11 +22,12 @@
     }							\
   } while(0)						\
 
+
 #define FILE_CHECK( fptr, fname ) do {				\
     if (fptr == NULL) {						\
       printf("Can't open file '%s' in '%s' at line %i.\n"	\
 	     , fname, __FILE__,  __LINE__);			\
-      assert(false);							\
+      assert(false);						\
     }								\
   } while(0)							\
 

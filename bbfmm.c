@@ -1242,7 +1242,6 @@ nodeT* NewNode(vec3 center, double L, int n) {
  * Function: BuildFMMHierarchy
  * ------------------------------------------------------------------
  * Builds the FMM hierarchy with l levels.
- *
  */
 void BuildFMMHierarchy(nodeT *A, int level, int n) {
    
