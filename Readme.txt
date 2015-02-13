@@ -1,3 +1,10 @@
+TODO: Make into a .a/.so lib, so the user does not need to 
+	compile the code with their application anymore.
+
+TODO: resolve the ambiguity of pow(int&, int) when compiled with
+	g++ (cmath lib included). The way Pieter does is to 
+	convert to pow(double, double) function.
+
 TODO: Remove the default assumption that the root center is at the
 	origin. Instead, compute the center and pass into FMM.
 
