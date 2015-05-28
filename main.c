@@ -103,8 +103,8 @@ void particleFMM(int argc, char *argv[]) {
    * symm=-1,1 for anti-symmetry and symmetry
    * kernel function has to be defined first
    */
-  kernel_t kernel = {"gaussian",  0.0,  0, &GaussianFun};
-  //kernel_t kernel = {"laplace", 1.0, 1, &LaplacianFun};
+  //kernel_t kernel = {"gaussian",  0.0,  0, &GaussianFun};
+  kernel_t kernel = {"laplace", 1.0, 1, &LaplacianFun};
   //kernel_t kernel = {"poly3", 0,  1, &Poly3Fun};
   //kernel_t kernel = {"poly3", -6,  1, &Poly3Fun};
     
@@ -210,9 +210,12 @@ void segmentFMM(int argc, char *argv[]) {
   // Segments are the three edges of a triangle
   // note: be careful of the box size, use box_len=4 (from -1 to 1) in this case 
   segT segment[Ns];
-  segment[0] = (segT){ (vec3){0.620000, 0.590000, 0.570000}, (vec3){0.710000, 0.510000, 0.650000} };
-  segment[1] = (segT){ (vec3){0.710000, 0.510000, 0.650000}, (vec3){0.900000, 0.510000, 0.650000} };
-  segment[2] = (segT){ (vec3){0.900000, 0.510000, 0.650000}, (vec3){0.620000, 0.590000, 0.570000} };
+  segment[0] = (segT){ (vec3){0.620000, 0.590000, 0.570000},
+		       (vec3){0.710000, 0.510000, 0.650000} };
+  segment[1] = (segT){ (vec3){0.710000, 0.510000, 0.650000},
+		       (vec3){0.900000, 0.510000, 0.650000} };
+  segment[2] = (segT){ (vec3){0.900000, 0.510000, 0.650000},
+		       (vec3){0.620000, 0.590000, 0.570000} };
 
  
   // Burger's vector
