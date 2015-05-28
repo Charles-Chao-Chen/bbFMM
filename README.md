@@ -1,5 +1,4 @@
 # bbFMM
-This code has more features and serves as the backend for https://github.com/ruoxi-wang/BBFMM3D 
 
 The c++ version with documentation can be found at https://github.com/ruoxi-wang/BBFMM3D
 
