@@ -1,17 +1,15 @@
 CC = gcc
 LD = gcc
 
-#BLAS_DIR = /cm/shared/apps/openblas/dynamic/0.2.6/lib
-#BLAS_INCLUDE = /cm/shared/apps/openblas/dynamic/0.2.6/include
-#LAPACK_DIR = /cm/shared/apps/lapack/open64/64/3.4.2
-#FFTW_DIR = /cm/shared/apps/fftw/openmpi/open64/64/2.1.5/double/lib
-#FFTW_INCLUDE = /cm/shared/apps/fftw/openmpi/open64/64/2.1.5/double/include
+FFTW_ROOT = /home/cchen10/Softwares/fftw-3.3.5
+FFTW_LIB = $(FFTW_ROOT)/lib
+FFTW_INCLUDE = $(FFTW_ROOT)/include
 
 # make sure the corresponding modules have been added
 # and use 'extern "C"{}' to declare lapack routines
 LDPATH  = -L /usr/bin/ld
-LDFLAGS = -lblas -llapack -lfftw3 -lm 
-FLAGS   = -Wall -g -I $(BLAS_INCLUDE) -I $(FFTW_INCLUDE)
+LDFLAGS = -lblas -llapack -L$(FFTW_LIB) -lfftw3 -lm 
+FLAGS   = -Wall -O3 -I$(FFTW_INCLUDE)
 PFLAG   =
 
 

@@ -8,8 +8,8 @@ void segmentFMM (int argc, char *argv[]);
 int  main       (int argc, char *argv[]) {
 
 
-  particleFMM(argc, argv);
-  //segmentFMM (argc, argv);
+  //particleFMM(argc, argv);
+  segmentFMM (argc, argv);
   
 
   return 0;
@@ -232,10 +232,9 @@ void segmentFMM(int argc, char *argv[]) {
    * homogen = log_2 ( f(r) / f(2r) )
    * kernel function has to be defined first
    */
-  //AnisoInit();
-  //kernelT kfun = &AnisoFun;
-  kernel_t kernel = {"lapforce", 2.0, -1, &LapforceFun};
-
+  AnisoInit();
+  //kernel_t kernel = {"lapforce", 2.0, -1, &LapforceFun};
+  kernel_t kernel = {"Aniso", 2.0, -1, &AnisoFun};
   
   FMMSrc fmm_src = {SEG, NULL, NULL, segment, NULL, burger, Ns, n+2};
   double *phiFmm = bbfmm( fmm_src, field, Nf, dof, box_len, alpha,
@@ -283,12 +282,10 @@ void segmentFMM(int argc, char *argv[]) {
     err = ComputeL2Err(phiFmm, phiDir, Nf*dof.f);
     printf("Error of FMM: %e\n", err);
  
-
-    //AnisoClean();
     free(phiDir), phiDir=NULL;
   }
 
-  //AnisoClean();
+  AnisoClean();
   free(phiFmm);
 
 }
