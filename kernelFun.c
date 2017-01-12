@@ -133,25 +133,31 @@ void AnisoInit() {
   assert(AnisoParameters != NULL);
 
 
-  // Highly aniso example: need qMax = 20 for this example
   double c11, c12, c44;
+  int qMax;
+  
+#if 0
+
+  // Highly aniso example: need qMax = 20 for this example
   c11=14.88e2;
   c12=12.22e2;
   c44=9.9e2;
-  // c11 *= 1e9, c12 *= 1e9, c44 *= 1e9;
+  qMax = 20;
+
+#else
 
   // Isotropic example : qMax = 1 is OK for this example
-  /* c11 = 52.1e2;
-     c12 = 20.1e2;
-     c44 = 16.0e2;
-     qMax = 1;
-  */
+  c11 = 52.1e2;
+  c12 = 20.1e2;
+  c44 = 16.0e2;
+  qMax = 1;
+#endif
 
+  // c11 *= 1e9, c12 *= 1e9, c44 *= 1e9;
   
   double *c3 = malloc(sizeof(double)*3);
   c3[0] = c11, c3[1] = c12, c3[2] = c44;
 
-  int qMax = 20;
   double elasA = 2*c44/(c11-c12);
   printf("A=%.3f qMax=%d\n", elasA, qMax);
 
