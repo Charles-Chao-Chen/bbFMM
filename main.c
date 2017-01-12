@@ -239,13 +239,14 @@ void segmentFMM(int argc, char *argv[]) {
   FMMSrc fmm_src = {SEG, NULL, NULL, segment, NULL, burger, Ns, n+2};
   double *phiFmm = bbfmm( fmm_src, field, Nf, dof, box_len, alpha,
   			  n, grid, kernel, tree_lvl, pbc_lvl, epsilon );
-  
+
+#if 0
   printf("FMM with lpbc=%d:\n", pbc_lvl);
   int i;
   for (i=0; i<Nf*dof.f; i++)
     printf("%e\t", phiFmm[i]);
   printf("\n");
-
+#endif
     
   // Direct calculation
   if (dirCalc) {
@@ -272,15 +273,16 @@ void segmentFMM(int argc, char *argv[]) {
     double *phiDir = directCalc( field, Nf, seg2pnt, srcSize, q, dof, box_len,
 				 kernel.kfun, pbc_lvl );
 
+#if 0
     printf("Direct with lpbc=%d:\n", pbc_lvl);
     for (i=0; i<Nf*dof.f; i++)
       printf("%e\t", phiDir[i]);
     printf("\n");
-  
+#endif
 
     double err = 0;
     err = ComputeL2Err(phiFmm, phiDir, Nf*dof.f);
-    printf("Error of FMM: %e\n", err);
+    printf("Error of FMM with lpbc=%d: %e\n", pbc_lvl, err);
  
     free(phiDir), phiDir=NULL;
   }
