@@ -132,13 +132,13 @@ void GetM2L(double *Kweights, double boxLen, double alpha,
 
    
   if (grid_type == CHEB) {
-    sprintf(Kmat,"%s%s%sK%da%.1f.bin", dir_name, kernel.name, grid1, n, alpha);
-    sprintf(Umat,"%s%s%sU%da%.1f.bin", dir_name, kernel.name, grid1, n, alpha);
-    sprintf(Vmat,"%s%s%sV%da%.1f.bin", dir_name, kernel.name, grid1, n, alpha);
+    sprintf(Kmat,"%s%s%sK%d.bin", dir_name, kernel.name, grid1, n);
+    sprintf(Umat,"%s%s%sU%d.bin", dir_name, kernel.name, grid1, n);
+    sprintf(Vmat,"%s%s%sV%d.bin", dir_name, kernel.name, grid1, n);
   } else {
-    sprintf(Kmat,"%s%s%sK%da%.1f.bin", dir_name, kernel.name, grid2, n, alpha);
+    sprintf(Kmat,"%s%s%sK%d.bin", dir_name, kernel.name, grid2, n);
     sprintf(Umat,"Readme.txt"); // uniform grid does not have U or V file,
-    sprintf(Vmat,"Makefile");   // so just make sure thest two files exist
+    sprintf(Vmat,"Makefile");   // so just make sure these two files exist
   }
 	
 
