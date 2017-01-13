@@ -169,8 +169,10 @@ void segmentFMM(int argc, char *argv[]) {
   {
     int i;
     for (i = 1; i < argc; i++) {
-      if (!strcmp(argv[i],"-o"))
+      if (!strcmp(argv[i],"-o")) {
 	n        = atoi(argv[++i]);
+	epsilon  = pow(10,-n); // set Chebyshev compression ratio
+      }
       if (!strcmp(argv[i],"-l"))
 	tree_lvl = atoi(argv[++i]);
       if (!strcmp(argv[i],"-pbc"))
@@ -200,8 +202,6 @@ void segmentFMM(int argc, char *argv[]) {
     printf("Direct calculation:    %s.\n", dirCalc ? "yes" : "no");
     printf("***************************************\n\n");
   }
-  
-
 
   // set problem dimension {source, field}
   int2 dof = {9, 6}; 
