@@ -132,12 +132,10 @@ void AnisoInit() {
   AnisoParameters = malloc( sizeof(paraAniso) );
   assert(AnisoParameters != NULL);
 
+  double c11=2., c12=1., c44=1.;
+  int qMax=20;
 
-  double c11, c12, c44;
-  int qMax;
-  
 #if 0
-
   // Highly aniso example: need qMax = 20 for this example
   c11=14.88e2;
   c12=12.22e2;
@@ -145,7 +143,6 @@ void AnisoInit() {
   qMax = 20;
 
 #else
-
   // Isotropic example : qMax = 1 is OK for this example
   c11 = 52.1e2;
   c12 = 20.1e2;
@@ -153,7 +150,44 @@ void AnisoInit() {
   qMax = 1;
 #endif
 
-  // c11 *= 1e9, c12 *= 1e9, c44 *= 1e9;
+#ifdef A0_1
+  c11=325095652033.506409;
+  c12=38052173772.636864;
+  c44=14352173913.043480;
+  qMax = 20;
+
+#elif A0_3
+  c11=282997695908.421509;
+  c12=59101151835.179321;
+  c44=35401151975.585938;
+  qMax = 20;
+
+#elif A3
+  c11=172049667562.922791;
+  c12=114575166007.928711;
+  c44=90875166148.335312;
+  qMax = 20;
+
+#elif A10
+  c11=147487499859.593384;
+  c12=126856249859.593399;
+  c44=103156250000.000000;
+  qMax = 20;
+  
+#else
+  c11=221759999859.593384;
+  c12=89719999859.593399;
+  c44=66020000000.000000;
+  qMax = 1;
+
+#endif
+
+
+  c11=325095652033.506409;
+  c12=38052173772.636864;
+  c44=14352173913.043480;
+  qMax = 20;
+
   
   double *c3 = malloc(sizeof(double)*3);
   c3[0] = c11, c3[1] = c12, c3[2] = c44;
@@ -191,8 +225,7 @@ void AnisoInit() {
   AnisoParameters->C633  = C633;
   AnisoParameters->CdGdx = CdGdx;
 
-  ReadAnisoParameters(AnisoParameters);    
-     
+  ReadAnisoParameters(AnisoParameters);   
 }
 
 

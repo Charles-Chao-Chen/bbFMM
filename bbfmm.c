@@ -91,8 +91,8 @@ double* bbfmm( FMMSrc fmm_src, vec3 *field, int Nf, int2 dof,
 
   /* ---- Output and return ---- */
   
-  printf("Pre-Comp Time : %f seconds\n", t1-t0);
-  printf("FMM      Time : %f seconds\n", t2-t1);
+  printf("Pre-Comp Time : %e seconds\n", t1-t0);
+  printf("FMM      Time : %e seconds\n", t2-t1);
 
   return stressFmm;
 }
@@ -356,7 +356,7 @@ double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
   timeType t1 = Timer();
   UpwardPass(A, fmm_src, Cweights, Kweights, VT, Tkz, n, dof.s, cutoff.s, alpha, grid_type, kernel.homogen, root_level);
   timeType t2 = Timer();
-  printf("Time for upward pass: %f\n", t2-t1);
+  printf("Time for upward pass: %e\n", t2-t1);
   
   if (fmm_src.src_t == SEG)
     CleanGaussQuadrature();
@@ -372,14 +372,14 @@ double* FMMCompute(nodeT **A, FMMSrc fmm_src, vec3 *field, int Nf,
   FMMInteraction(A, K, Ktable, U, VT, Kweights, n, dof, cutoff,
 		 kernel.homogen, root_level, grid_type);  
   t2 = Timer();
-  printf("Time for M2L: %f\n", t2-t1);
+  printf("Time for M2L: %e\n", t2-t1);
 
   //printf("Begin downward pass ...\n");
   t1 = Timer();
   DownwardPass(A, field, fmm_src, Cweights, Tkz, n, dof,
 	       alpha, kernel.kfun, phi, grid_type);
   t2 = Timer();
-  printf("Time for downward pass: %f\n", t2-t1);
+  printf("Time for downward pass: %e\n", t2-t1);
 
   
   return phi; 

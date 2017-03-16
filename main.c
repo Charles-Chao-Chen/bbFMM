@@ -209,15 +209,11 @@ void segmentFMM(int argc, char *argv[]) {
 
   // Segments are the three edges of a triangle
   // note: be careful of the box size, use box_len=4 (from -1 to 1) in this case 
-  segT segment[Ns];
-  segment[0] = (segT){ (vec3){0.620000, 0.590000, 0.570000},
-		       (vec3){0.710000, 0.510000, 0.650000} };
-  segment[1] = (segT){ (vec3){0.710000, 0.510000, 0.650000},
-		       (vec3){0.900000, 0.510000, 0.650000} };
-  segment[2] = (segT){ (vec3){0.900000, 0.510000, 0.650000},
-		       (vec3){0.620000, 0.590000, 0.570000} };
-
- 
+  /*
+  vec3 N0 = (vec3){0.620000, 0.590000, 0.570000};
+  vec3 N1 = (vec3){0.710000, 0.510000, 0.650000};
+  vec3 N2 = (vec3){0.900000, 0.510000, 0.650000};
+  
   // Burger's vector
   double burger[] = { -1.190000, -0.780000, -0.330000,
 		      -1.190000, -0.780000, -0.330000,
@@ -225,8 +221,36 @@ void segmentFMM(int argc, char *argv[]) {
   
   // one field point
   vec3 field[] = { (vec3){-1.42, 1.37, 1.72} };
+  */
+
   
+  vec3 N0 = (vec3){0.1, 0.5, 0.1};
+  vec3 N1 = (vec3){0.9, 0.9, 0.9};
+  vec3 N2 = (vec3){0.9, 0.1, 0.5};
+
+  // one field point
+  vec3 field[] = { (vec3){-1.5, -1.5, -1.5} };
+ 
+
+  /*
+  vec3 N0 = (vec3){0.620000, 0.590000, 0.570000};
+  vec3 N1 = (vec3){0.710000, 0.510000, 0.650000};
+  vec3 N2 = (vec3){0.900000, 0.510000, 0.650000};
+    
+  vec3 field[] = { (vec3){-1.42, 1.37, 1.72} };
+  */
+    
+  // Burger's vector
+  double burger[] = { -5.7735026919e-01, -5.7735026919e-01, -5.7735026919e-01,
+		      -5.7735026919e-01, -5.7735026919e-01, -5.7735026919e-01,
+		      -5.7735026919e-01, -5.7735026919e-01, -5.7735026919e-01 };
   
+
+  segT segment[Ns];
+  segment[0] = (segT){ N0, N1 };
+  segment[1] = (segT){ N1, N2 };
+  segment[2] = (segT){ N2, N0 };
+
   /* kernel_t struct: {name, homogen, symmetry, kernelFunction}
    * name can be arbitrary string given by user
    * homogen = log_2 ( f(r) / f(2r) )
