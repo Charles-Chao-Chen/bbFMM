@@ -197,8 +197,10 @@ void segmentFMM(int argc, char *argv[]) {
 	   "FMM PBC level:         %d,\n"
 	   "Grid:                  %s,\n"
 	   "Box size:              %.2f,\n"
-	   "Adjust box size by:    %.2f,\n",
-	   Ns, Nf, n, tree_lvl, pbc_lvl, grid ? "Chebyshev": "uniform", box_len, alpha);
+	   "Adjust box size by:    %.2f,\n"
+	   "SVD error:             %.2e\n",
+	   Ns, Nf, n, tree_lvl, pbc_lvl,
+	   grid ? "Chebyshev":"uniform", box_len, alpha, epsilon);
     printf("Direct calculation:    %s.\n", dirCalc ? "yes" : "no");
     printf("***************************************\n\n");
   }
@@ -208,38 +210,25 @@ void segmentFMM(int argc, char *argv[]) {
 
 
   // Segments are the three edges of a triangle
-  // note: be careful of the box size, use box_len=4 (from -1 to 1) in this case 
+  // note: be careful of the box size, use box_len=4 (from -2 to 2) in this case 
   /*
   vec3 N0 = (vec3){0.620000, 0.590000, 0.570000};
   vec3 N1 = (vec3){0.710000, 0.510000, 0.650000};
   vec3 N2 = (vec3){0.900000, 0.510000, 0.650000};
   
-  // Burger's vector
-  double burger[] = { -1.190000, -0.780000, -0.330000,
-		      -1.190000, -0.780000, -0.330000,
-		      -1.190000, -0.780000, -0.330000, };
-  
   // one field point
-  vec3 field[] = { (vec3){-1.42, 1.37, 1.72} };
-  */
+  vec3 field[] = { (vec3){-1.42, -1.37, -1.72} };
+*/
 
-  
+
   vec3 N0 = (vec3){0.1, 0.5, 0.1};
   vec3 N1 = (vec3){0.9, 0.9, 0.9};
   vec3 N2 = (vec3){0.9, 0.1, 0.5};
 
   // one field point
   vec3 field[] = { (vec3){-1.5, -1.5, -1.5} };
- 
 
-  /*
-  vec3 N0 = (vec3){0.620000, 0.590000, 0.570000};
-  vec3 N1 = (vec3){0.710000, 0.510000, 0.650000};
-  vec3 N2 = (vec3){0.900000, 0.510000, 0.650000};
-    
-  vec3 field[] = { (vec3){-1.42, 1.37, 1.72} };
-  */
-    
+  
   // Burger's vector
   double burger[] = { -5.7735026919e-01, -5.7735026919e-01, -5.7735026919e-01,
 		      -5.7735026919e-01, -5.7735026919e-01, -5.7735026919e-01,
@@ -260,7 +249,7 @@ void segmentFMM(int argc, char *argv[]) {
   //kernel_t kernel = {"lapforce", 2.0, -1, &LapforceFun};
   kernel_t kernel = {"Aniso", 2.0, -1, &AnisoFun};
   
-  FMMSrc fmm_src = {SEG, NULL, NULL, segment, NULL, burger, Ns, n+2};
+  FMMSrc fmm_src = {SEG, NULL, NULL, segment, NULL, burger, Ns, 5};
   double *phiFmm = bbfmm( fmm_src, field, Nf, dof, box_len, alpha,
   			  n, grid, kernel, tree_lvl, pbc_lvl, epsilon );
 

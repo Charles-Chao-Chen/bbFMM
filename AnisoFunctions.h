@@ -22,8 +22,8 @@ void MatrixDblMultComplex(double *a, int aRows, int aCols, int aLD,
                           real8_complex *b, int bCols, int bLD,
                           real8_complex *c, int cLD);
 void NormalizeVec(double vec[3]);
-  void cross(double a[3], double b[3], double c[3]);
-  int Matrix33Invert(double a[3][3], double b[3][3]);
+void cross(double a[3], double b[3], double c[3]);
+int Matrix33Invert(double a[3][3], double b[3][3]);
 
 void gqwp(int n, double *xx, double *ww);
 

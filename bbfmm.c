@@ -180,8 +180,8 @@ bool PrecomputeAvailable( char *Kmat, char *Umat, char *Vmat,
   if (fU!=NULL) fclose(fU);
   if (fV!=NULL) fclose(fV);
 
-  if (avail) printf("Precompute files exist.");
-  else printf("Precompute files do NOT exist.");
+  if (avail) printf("Precompute files exist.\n");
+  else printf("Precompute files do NOT exist.\n");
   return avail;
 }
 
