@@ -137,8 +137,8 @@ void GetM2L(double *Kweights, double boxLen, double alpha,
     sprintf(Vmat,"%s%s%sV%d.bin", dir_name, kernel.name, grid1, n);
   } else {
     sprintf(Kmat,"%s%s%sK%d.bin", dir_name, kernel.name, grid2, n);
-    sprintf(Umat,"Readme.txt"); // uniform grid does not have U or V file,
-    sprintf(Vmat,"Makefile");   // so just make sure these two files exist
+    sprintf(Umat,"bbfmm.c"); // uniform grid does not have U or V file,
+    sprintf(Vmat,"bbfmm.c"); // so just make sure these two files exist
   }
 	
 
@@ -157,39 +157,32 @@ void GetM2L(double *Kweights, double boxLen, double alpha,
 bool PrecomputeAvailable( char *Kmat, char *Umat, char *Vmat,
 			  double homogen, double boxLen,
 			  int treeLevel, int grid_type ) {
+
+  bool avail = true;
   
   FILE *fK, *fU, *fV;
   fK = fopen(Kmat, "rb");
   fU = fopen(Umat, "rb");
   fV = fopen(Vmat, "rb");
 	 
-  if (fK == NULL || fU == NULL || fV == NULL) { // files do not exist
-    
-    if (fK!=NULL) fclose(fK);
-    if (fU!=NULL) fclose(fU);
-    if (fV!=NULL) fclose(fV);
-    return false;
-    
+  if (fK == NULL || fU == NULL || fV == NULL) { // files do not exist    
+    avail = false;
   } else if ( !IsHomoKernel(homogen) ) { // non-homogeneous kernel
-
     double len_file;
     int    lvl_file;    
     READ_CHECK( fread(&len_file, sizeof(double), 1, fK), 1 );
-    READ_CHECK( fread(&lvl_file, sizeof(int),    1, fK), 1 );
-    fclose(fK);
-    fclose(fU);
-    fclose(fV);
-    
+    READ_CHECK( fread(&lvl_file, sizeof(int),    1, fK), 1 );    
     if ( lvl_file != treeLevel || !equal_double( len_file, boxLen ) )   
-      return false;
-    else
-      return true;    
+      avail = false;
   }
 
-  fclose(fK);
-  fclose(fU);
-  fclose(fV);
-  return true;
+  if (fK!=NULL) fclose(fK);
+  if (fU!=NULL) fclose(fU);
+  if (fV!=NULL) fclose(fV);
+
+  if (avail) printf("Precompute files exist.");
+  else printf("Precompute files do NOT exist.");
+  return avail;
 }
 
 
@@ -297,7 +290,6 @@ void FMMReadMatrices(double **K, double **U, double **VT, int2 *cutoff,
   fseek(fK, 1*sizeof(int) + 1*sizeof(double), SEEK_SET); // skip 'tree level' and 'box length'
   READ_CHECK( fread(*K, sizeof(double), Ksize, fK), Ksize );
   fclose(fK);
-
 }
 
  
